@@ -4,11 +4,11 @@
 --invariant: installed() re-reads REAPER on every call
 --shape: row = { key, name, ident, format }  -- ident raw from REAPER; format the name's prefix before ':', or ''
 --shape: fxCatalogue (ds global) = { n = int, entries = { [catalogueKey] = entry }, standing = { [path] = true } }
---shape: entry = { ports?={ ins=int, outs=int }, usage?={ s=num, n0=int }, traits?={ midiIn?=bool, midiOut?=bool, instrument?=bool }, paths?={ [path] = true }, favourite?=true, developer?=string }
+--shape: entry = { ports?={ ins=int, outs=int }, usage?={ s=num, n0=int }, traits?={ midiIn?=bool, midiOut?=bool, instrument?=bool }, paths?={ [path] = true }, developer?=string }
 --shape: path = string  -- names joined by '/', none empty
 --shape: traits = { midiIn=bool, midiOut=bool, instrument=bool, busAware=bool }  -- resolved; all four present
 --shape: jsfxParse = { busAware=bool, midiIn=bool, midiOut=bool }
---shape: sources = { installed=int, tree=source, user=source+{ standing={ [path]=true } }, folders=source+{ favourites={ [catalogueKey]=true } }, derived=source, developers=source }  -- derived names nested by the seed
+--shape: sources = { installed=int, tree=source, user=source+{ standing={ [path]=true } }, folders=source, derived=source, developers=source }  -- derived names nested by the seed
 --shape: source = { names={ [catalogueKey]={ [name]=true } }, covered=int, distinct=int, dropped=int }
 
 local util = require 'util'
@@ -340,7 +340,8 @@ end
 
 local FOLDER_FORMAT = { ['2'] = 'JS', ['3'] = 'VST', ['5'] = 'AU', ['7'] = 'CLAP' }
 local SMART_FILTER  = '1048576'
-local FAVOURITES    = '0'
+local FAVOURITES_ID   = '0'
+local FAVOURITES_PATH = 'Favourites'
 
 -- REAPER's derived category names: to a path, to false (discarded), or absent (kept bare).
 local SEED_NESTING = {
@@ -398,31 +399,30 @@ local function derivedNames(value)
   return names
 end
 
--- Each folder's members, its sections found by id; id 0's members are the favourites.
+-- Each folder's members, its sections found by id; id 0 is named Favourites, whatever its Name.
 local function fromFolders(ini, index)
-  local names, favourites, dropped = {}, {}, 0
+  local names, dropped = {}, 0
   local folders = ini.Folders or {}
   for i = 0, (tonumber(folders.NbFolders) or 0) - 1 do
-    local id, name = folders['Id' .. i], folders['Name' .. i]
-    local members  = id and ini['Folder' .. id]
-    if members and (id == FAVOURITES or (name and isPath(name))) then
+    local id      = folders['Id' .. i]
+    local name    = id == FAVOURITES_ID and FAVOURITES_PATH or folders['Name' .. i]
+    local members = id and ini['Folder' .. id]
+    if members and name and isPath(name) then
       for n = 0, (tonumber(members.Nb) or 0) - 1 do
         local item, itemType = members['Item' .. n], members['Type' .. n]
         local format = FOLDER_FORMAT[itemType]
         local keys   = format and item and resolve(index, fxCatalogue.key(format, item))
         if itemType == SMART_FILTER then -- a filter, naming no plugin
         elseif not keys then dropped = dropped + 1
-        elseif id == FAVOURITES then util.assign(favourites, keys)
         else for key in pairs(keys) do addName(names, key, name) end end
       end
     end
   end
-  return names, favourites, dropped
+  return names, dropped
 end
 
--- A source over its names, covering also the keys in alsoCovered.
-local function source(names, dropped, alsoCovered)
-  local covered, distinct = util.assign({}, alsoCovered or {}), {}
+local function source(names, dropped)
+  local covered, distinct = {}, {}
   for key, held in pairs(names) do
     covered[key] = true
     util.assign(distinct, held)
@@ -446,20 +446,17 @@ function fxCatalogue.sources()
     local name = treeName(row, roots)
     if name and isPath(name) then addName(treeNames, row.key, name) end
   end
-  local folderNames, favourites, folderDrops = fromFolders(fxFolders, index)
   local user = source(fromSection(fxFolders.category, index, categoryNames))
   user.standing = {}
   for path in pairs(fxFolders.categories or {}) do
     if isPath(path) then user.standing[path] = true end
   end
-  local folders = source(folderNames, folderDrops, favourites)
-  folders.favourites = favourites
 
   return {
     installed  = #rows,
     tree       = source(treeNames, 0),
     user       = user,
-    folders    = folders,
+    folders    = source(fromFolders(fxFolders, index)),
     derived    = source(fromSection(fxTags.category, index, derivedNames)),
     developers = source(fromSection(fxTags.developer, index, developerNames)),
   }
@@ -481,7 +478,7 @@ end
 
 --pre: sources a sources() result; chosen a set of its source names
 --pre: mode augment or replace, else raises
---post: replace first clears standing and each entry's paths, favourite and developer, chosen or not
+--post: replace first clears standing and each entry's paths and developer, chosen or not
 --post: developer written only to an entry holding none, the lowest-sorting where a key has several
 function fxCatalogue.import(ds, sources, chosen, mode)
   if not MODES[mode] then
@@ -496,7 +493,7 @@ function fxCatalogue.import(ds, sources, chosen, mode)
   local catalogue = load(ds)
   local entries   = catalogue.entries
   if mode == 'replace' then
-    for _, entry in pairs(entries) do entry.paths, entry.favourite, entry.developer = nil, nil, nil end
+    for _, entry in pairs(entries) do entry.paths, entry.developer = nil, nil end
     catalogue.standing = {}
   end
   local function entryAt(key)
@@ -511,9 +508,6 @@ function fxCatalogue.import(ds, sources, chosen, mode)
         entry.paths = util.assign(entry.paths or {}, names)
       end
     end
-  end
-  if chosen.folders then
-    for key in pairs(sources.folders.favourites) do entryAt(key).favourite = true end
   end
   if chosen.user then util.assign(catalogue.standing, sources.user.standing) end
   if chosen.developers then

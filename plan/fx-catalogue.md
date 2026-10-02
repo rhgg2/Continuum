@@ -30,10 +30,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-10-02 fxCatalogue: file favourites under a path, dropping the flag (§ Favourites)
 - 2026-10-02 fxCatalogue: nest derived categories by the seed (§ The seed nesting)
 - 2026-10-02 fxCatalogue: import the chosen sources (§ Import)
 - 2026-10-02 fxCatalogue: read the sources, resolved to catalogue keys (§ The sources)
-- 2026-10-01 fxCatalogue: add category paths, standing paths and the category list (design § The taxonomy)
 
 ## Now
 
@@ -41,12 +41,6 @@
 
 ## Queued (current phase; one-liners)
 
-- fxCatalogue: favourites as a path (§ Favourites) — the favourite flag
-  leaves the entry; import files folder id 0's members under
-  `Favourites`, so the folders source yields that path for them and
-  covers them as it covers any named plugin; classification is category
-  paths and developer, and replace clears those. Specs:
-  fxCatalogue_sources_spec and fxCatalogue_spec drop the flag.
 - fxCatalogue: the picker's list as a function of its text (§ The picker
   3–10, 14–15) — split at the last `/` into current place and stem;
   the place resolves exact, else to the one case-insensitive match,

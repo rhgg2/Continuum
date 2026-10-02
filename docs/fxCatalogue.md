@@ -57,8 +57,8 @@
    every project.
 
 1. An entry holds facts about its plugin: its audio ports, its usage
-   score, any authored traits, its category paths (§ The taxonomy), a
-   favourite flag and a developer name.
+   score, any authored traits, its category paths (§ The taxonomy) and
+   a developer name.
 
 1. The facts are independent. An entry may carry any of them and lack
    the rest, and a write to one leaves the others alone.
@@ -252,8 +252,7 @@
 
 1. Each source states three counts: the installed plugins it
    **covers**, the distinct names it yields, and the references it
-   dropped. A plugin is covered where the source gives it a name, and
-   for user folders also where it is a favourite.
+   dropped. A plugin is covered where the source gives it a name.
 
 ## The seed nesting
 
@@ -287,8 +286,8 @@
    before the choice, so the choice rests on what a given installation
    holds.
 
-1. An entry's **classification** is its category paths, its favourite
-   flag and its developer name.
+1. An entry's **classification** is its category paths and its
+   developer name.
 
 1. Import runs in one of two modes. **Augment** adds to what the
    catalogue holds. **Replace** first clears every entry's
@@ -304,8 +303,8 @@
 1. A category name becomes a category path, split on `/`. A folder name
    becomes one the same way.
 
-1. Membership of folder id 0 sets the favourite flag, and files
-   nothing.
+1. Import files the members of folder id 0 under `Favourites`, a
+   category path like any other.
 
 1. The names in user `[categories]` become standing paths, so they are
    listed whether or not anything is filed under them.

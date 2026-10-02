@@ -4,6 +4,11 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-10-02** — Import files folder id 0 under Continuum's spelling `Favourites`, over the
+  folder's own Name (REAPER writes `Favorites`), and from there the folder takes the one branch
+  every folder takes. A live entry's stale favourite flag is left inert, over a migration, since
+  persisted shapes are free to change; `Favourites` sorts like any path, unpinned.
+
 - **2026-10-02** — fx picker: unfiled is offered as no place. A child place is a category path, so
   unfiled has no spelling the text could name, and any reserved spelling is also a legal user path.
   An unfiled plugin is reached from the root by its name.

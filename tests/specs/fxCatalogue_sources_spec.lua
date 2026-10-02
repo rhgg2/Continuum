@@ -11,7 +11,7 @@
 -- to every JSFX whose file name it is, else to either ignoring case; nothing
 -- matching is one dropped reference. A folder item keys by its section's Type
 -- and resolves exactly or ignoring case; Type 1048576 is a smart folder's
--- filter and counts nothing, and folder id 0 is the favourites. A section with
+-- filter and counts nothing, and folder id 0 files under Favourites. A section with
 -- a line that does not parse is skipped whole. Category values split on '|',
 -- and a name with an empty '/'-segment (the empty one after a trailing '|') is
 -- not kept, nor counted as a drop. A missing ini reads as empty.
@@ -20,11 +20,11 @@
 -- path, a name it discards yields nothing, and a name it lacks passes bare.
 -- A key whose derived names are all discarded is not covered.
 --
--- Import files each chosen path source's names on its keys, flags folder id 0's
--- members favourite, makes [categories] standing, and names a developer only
--- on an entry holding none. Replace first clears every entry's paths, favourite
--- and developer, and the standing paths, whichever sources are chosen; ports,
--- usage and traits stand, as does an entry under an unresolved key.
+-- Import files each chosen path source's names on its keys, folder id 0's
+-- members under Favourites like any folder's, makes [categories] standing, and
+-- names a developer only on an entry holding none. Replace first clears every
+-- entry's paths and developer, and the standing paths, whichever sources are
+-- chosen; ports, usage and traits stand, as does an entry under an unresolved key.
 --
 -- The fixtures under tests/fixtures/fxSources are trimmed from a real install.
 -- Fabricated: the vstpath64 key (the x64 key name is unverified), the
@@ -158,14 +158,14 @@ return {
     end,
   },
   {
-    name = 'user folders key their items by Type, by id, with id 0 the favourites',
+    name = 'user folders key their items by Type, by id, with id 0 filed under Favourites',
     run = function()
       local folders = sourcesAt(FIXTURES).folders
-      t.deepEq(folders.favourites, set{ ROWS[13].key }, 'folder id 0 holds the favourites')
       t.deepEq(folders.names, named{
         [1] = { 'Alpha' }, [8] = { 'Alpha' }, [5] = { 'Alpha' }, [14] = { 'Beta' }, [11] = { 'Beta' },
+        [13] = { 'Favourites' },
       }, 'a moved VST keys by file name; the smart folder and the unparseable section name nothing')
-      counts(folders, 6, 2, 1, 'folders')
+      counts(folders, 6, 3, 1, 'folders')
     end,
   },
   {
@@ -200,7 +200,6 @@ return {
         counts(sources[label], 0, 0, 0, label)
       end
       t.deepEq(sources.user.standing, {}, 'no standing paths')
-      t.deepEq(sources.folders.favourites, {}, 'no favourites')
       t.deepEq(sources.tree.names, named{
         [7] = { 'loser' }, [8] = { 'guitar' }, [9] = { 'utility' }, [10] = { 'old' },
       }, 'JSFX directories need no file')
@@ -227,18 +226,19 @@ return {
     end,
   },
   {
-    name = 'folders file by name and flag id 0 favourite; user categories make [categories] standing',
+    name = 'folders file by name, id 0 under Favourites; user categories make [categories] standing',
     run = function()
       local sources, ds = sourcesAt(FIXTURES)
       local fxCatalogue = require('fxCatalogue')
       fxCatalogue.import(ds, sources, { user = true, folders = true }, 'augment')
       local entries = entriesOf(ds)
-      t.deepEq(entries[ROWS[13].key], { favourite = true }, 'a favourite files nothing')
+      t.deepEq(entries[ROWS[13].key], { paths = set{ 'Favourites' } }, 'folder id 0 files under Favourites')
       t.deepEq(entries[ROWS[2].key].paths, set{ 'Filter', 'Mad' }, 'user names filed')
       t.deepEq(entries[ROWS[14].key].paths, set{ 'Beta' }, 'folder names filed')
       t.deepEq(ds:get('fxCatalogue').standing, set{ 'Clipper', 'FSU/Lofi', 'Mad' }, '[categories] stand')
       local listed = set(fxCatalogue.categories(ds))
-      t.truthy(listed.Clipper and listed.FSU and listed.Alpha, 'standing, prefix and folder paths listed')
+      t.truthy(listed.Clipper and listed.FSU and listed.Alpha and listed.Favourites,
+        'standing, prefix and folder paths listed')
     end,
   },
   {
@@ -271,8 +271,8 @@ return {
       local fxCatalogue = require('fxCatalogue')
       local kept = { ports = { ins = 1, outs = 2 }, usage = { s = 1, n0 = 1 }, traits = { midiOut = false } }
       ds:assign('fxCatalogue', { n = 1, entries = {
-        [ROWS[1].key] = util.assign({ paths = { Held = true }, favourite = true, developer = 'X' }, kept),
-        ['gone.vst3'] = { paths = { Held = true }, favourite = true, usage = { s = 1, n0 = 1 } },
+        [ROWS[1].key] = util.assign({ paths = { Held = true }, developer = 'X' }, kept),
+        ['gone.vst3'] = { paths = { Held = true }, developer = 'X', usage = { s = 1, n0 = 1 } },
       }, standing = { Kept = true } })
       fxCatalogue.import(ds, sources, { tree = true }, 'replace')
       local entries = entriesOf(ds)
@@ -280,7 +280,7 @@ return {
         'only the chosen tree path, the other facts kept')
       t.deepEq(entries['gone.vst3'], { usage = { s = 1, n0 = 1 } }, 'the unresolved entry stands, cleared')
       t.deepEq(ds:get('fxCatalogue').standing, {}, 'standing cleared')
-      t.eq(entries[ROWS[13].key], nil, 'the declined favourite is not re-flagged')
+      t.eq(entries[ROWS[13].key], nil, 'the declined folder id 0 is not filed')
     end,
   },
   {

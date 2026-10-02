@@ -60,13 +60,7 @@ Landed in `docs/fxCatalogue.md` § The seed nesting.
 
 ## Favourites
 
-1. Favourites is a category path like any other. Favouriting a plugin
-   files it under `Favourites`.
-
-1. An entry's classification is thus its category paths and its
-   developer name (`docs/fxCatalogue.md` § Import).
-
-1. Import files the members of folder id 0 under `Favourites`.
+Landed in `docs/fxCatalogue.md` § Import.
 
 ## The picker
 
@@ -226,9 +220,9 @@ Landed in `docs/fxCatalogue.md` § The seed nesting.
 1. What relinking an unresolved entry looks like, and whether a
    relinked key can be inferred from the entry's other facts.
 
-1. Where the catalogue is edited from — filing a plugin, making a
-   path, authoring a trait, running a probe — and whether that surface
-   is a page of its own.
+1. Where the catalogue is edited from — filing a plugin (favouriting
+   one files it under `Favourites`), making a path, authoring a trait,
+   running a probe — and whether that surface is a page of its own.
 
 1. Whether a path can be deleted, and what becomes of the plugins
    filed under it.

@@ -261,13 +261,13 @@ return {
         t.truthy(row.key ~= 'gone.vst3', 'precondition: gone.vst3 is installed under no key')
       end
       ds:assign('fxCatalogue', { n = 0, entries = {
-        ['gone.vst3'] = { favourite = true, paths = { ['Effects/Reverb'] = true } } } })
+        ['gone.vst3'] = { developer = 'X', paths = { ['Effects/Reverb'] = true } } } })
       fxCatalogue.recordUse(ds, 'gone.vst3', { ins = 1, outs = 2 })
       fxCatalogue.recordUse(ds, 'Canvas_Audio___8K.vst3', { ins = 1, outs = 1 })
       local entries = ds:get('fxCatalogue').entries
       local gone = entries['gone.vst3']
       t.truthy(gone, 'the unresolved entry stands')
-      t.eq(gone.favourite, true, 'a use leaves the entry\'s other facts alone')
+      t.eq(gone.developer, 'X', 'a use leaves the entry\'s other facts alone')
       t.deepEq(gone.paths, { ['Effects/Reverb'] = true }, 'and its paths')
       t.deepEq(gone.ports, { ins = 1, outs = 2 })
       near(gone.usage.s, 1)
