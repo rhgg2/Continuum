@@ -8,7 +8,7 @@
 --shape: path = string  -- names joined by '/', none empty
 --shape: traits = { midiIn=bool, midiOut=bool, instrument=bool, busAware=bool }  -- resolved; all four present
 --shape: jsfxParse = { busAware=bool, midiIn=bool, midiOut=bool }
---shape: sources = { installed=int, tree=source, user=source+{ standing={ [path]=true } }, folders=source+{ favourites={ [catalogueKey]=true } }, derived=source, developers=source }
+--shape: sources = { installed=int, tree=source, user=source+{ standing={ [path]=true } }, folders=source+{ favourites={ [catalogueKey]=true } }, derived=source, developers=source }  -- derived names nested by the seed
 --shape: source = { names={ [catalogueKey]={ [name]=true } }, covered=int, distinct=int, dropped=int }
 
 local util = require 'util'
@@ -342,6 +342,62 @@ local FOLDER_FORMAT = { ['2'] = 'JS', ['3'] = 'VST', ['5'] = 'AU', ['7'] = 'CLAP
 local SMART_FILTER  = '1048576'
 local FAVOURITES    = '0'
 
+-- REAPER's derived category names: to a path, to false (discarded), or absent (kept bare).
+local SEED_NESTING = {
+  ['Effect']             = 'Effects',
+  ['Effects']            = 'Effects',
+  ['Fx']                 = 'Effects',
+  ['Channel Strip']      = 'Effects/Channel Strip',
+  ['Chorus']             = 'Effects/Chorus',
+  ['Compressor']         = 'Effects/Compressor',
+  ['Delay']              = 'Effects/Delay',
+  ['Distortion']         = 'Effects/Distortion',
+  ['Dynamics']           = 'Effects/Dynamics',
+  ['EQ']                 = 'Effects/EQ',
+  ['Filter']             = 'Effects/Filter',
+  ['Gate']               = 'Effects/Gate',
+  ['Guitar']             = 'Effects/Guitar',
+  ['Mastering']          = 'Effects/Mastering',
+  ['Microphone']         = 'Effects/Microphone',
+  ['Modulation']         = 'Effects/Modulation',
+  ['Pitch Correction']   = 'Effects/Pitch Correction',
+  ['Pitch Shift']        = 'Effects/Pitch Shift',
+  ['Restoration']        = 'Effects/Restoration',
+  ['Reverb']             = 'Effects/Reverb',
+  ['Spatial']            = 'Effects/Spatial',
+  ['Instrument']         = 'Instruments',
+  ['Drum']               = 'Instruments/Drum',
+  ['External']           = 'Instruments/External',
+  ['Organ']              = 'Instruments/Organ',
+  ['Piano']              = 'Instruments/Piano',
+  ['Sampler']            = 'Instruments/Sampler',
+  ['Synth']              = 'Instruments/Synth',
+  ['Tools']              = 'Tools',
+  ['Analyzer']           = 'Tools/Analyzer',
+  ['Generator']          = 'Tools/Generator',
+  ['Tuner']              = 'Tools/Tuner',
+  ['Up-Downmix']         = 'Tools/Up-Downmix',
+  ['Ambisonics']         = false,
+  ['Mono']               = false,
+  ['Stereo']             = false,
+  ['Surround']           = false,
+  ['MIDI']               = false,
+  ['Network']            = false,
+  ['u-he']               = false,
+  ['Fx Instrument Tools'] = false,
+}
+
+-- A derived category value's names, nested: see docs/fxCatalogue.md § The seed nesting.
+local function derivedNames(value)
+  local names = {}
+  for _, name in ipairs(categoryNames(value)) do
+    local nested = SEED_NESTING[name]
+    if nested == nil then util.add(names, name)
+    elseif nested then util.add(names, nested) end
+  end
+  return names
+end
+
 -- Each folder's members, its sections found by id; id 0's members are the favourites.
 local function fromFolders(ini, index)
   local names, favourites, dropped = {}, {}, 0
@@ -404,7 +460,7 @@ function fxCatalogue.sources()
     tree       = source(treeNames, 0),
     user       = user,
     folders    = folders,
-    derived    = source(fromSection(fxTags.category, index, categoryNames)),
+    derived    = source(fromSection(fxTags.category, index, derivedNames)),
     developers = source(fromSection(fxTags.developer, index, developerNames)),
   }
 end

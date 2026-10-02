@@ -21,7 +21,7 @@
    with its per-source coverage in augment or replace mode, and the
    shipped seed nesting. The model only: import and rename are reached
    through the bridge, and their surface waits with the probe's.
-   ← in flight
+   — landed 2026-10-02, 4 commits.
 4. **Phase 4 — The picker** (§ The picker, § The filtering seam) — the
    wiring picker grouped by place with favourites above and unfiled last,
    usage and in-project ordering within a place, and the candidate
@@ -29,10 +29,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-10-02 fxCatalogue: nest derived categories by the seed (§ The seed nesting)
 - 2026-10-02 fxCatalogue: import the chosen sources (§ Import)
 - 2026-10-02 fxCatalogue: read the sources, resolved to catalogue keys (§ The sources)
 - 2026-10-01 fxCatalogue: add category paths, standing paths and the category list (design § The taxonomy)
-- 2026-10-01 fxCatalogue: resolve a plugin's traits, authored over parsed over mark (§ Traits)
 
 ## Now
 
@@ -40,10 +40,4 @@
 
 ## Queued (current phase; one-liners)
 
-- **fxCatalogue: the seed nesting** (§ The seed nesting) — a shipped
-  table from derived names to paths, placing names such as `Reverb`
-  and `Compressor` under broader ones; applied when derived categories
-  are imported, a name it lacks filed at its bare name. The names
-  REAPER derives on the development installation run from `Synth`,
-  `Distortion`, `Dynamics` and `Reverb` down to `Tuner` and `Organ`.
 

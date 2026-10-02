@@ -16,6 +16,10 @@
 -- and a name with an empty '/'-segment (the empty one after a trailing '|') is
 -- not kept, nor counted as a drop. A missing ini reads as empty.
 --
+-- A derived name is nested by the seed: a name it maps to a path becomes that
+-- path, a name it discards yields nothing, and a name it lacks passes bare.
+-- A key whose derived names are all discarded is not covered.
+--
 -- Import files each chosen path source's names on its keys, flags folder id 0's
 -- members favourite, makes [categories] standing, and names a developer only
 -- on an entry holding none. Replace first clears every entry's paths, favourite
@@ -24,7 +28,8 @@
 --
 -- The fixtures under tests/fixtures/fxSources are trimmed from a real install.
 -- Fabricated: the vstpath64 key (the x64 key name is unverified), the
--- old/volume and TDR Kotelnikov plugins, and every extra row a case adds.
+-- old/volume and TDR Kotelnikov plugins, the reacomp and oscillator.jsfx
+-- [category] lines, and every extra row a case adds.
 -- The fixture's VST3 idents all sit under the VST3 root too, so the deepest
 -- root hides a prefix match on VST; the whole-root case needs its own row.
 local t       = require('support')
@@ -136,7 +141,7 @@ return {
       local sources = sourcesAt(FIXTURES, { volume, canvas })
       t.deepEq(sources.user.names[ROWS[9].key], set{ 'Mad' }, 'volume=Mad resolves by file name')
       t.eq(sources.user.names[volume.key], nil, 'Volume differs in case from volume=Mad')
-      t.deepEq(sources.derived.names[ROWS[1].key], set{ 'EQ' }, 'Canvas_Audio___8K.vst3 resolves exactly')
+      t.deepEq(sources.derived.names[ROWS[1].key], set{ 'Effects/EQ' }, 'Canvas_Audio___8K.vst3 resolves exactly')
       t.eq(sources.derived.names[canvas.key], nil, 'its lower-case twin differs in case')
     end,
   },
@@ -164,14 +169,16 @@ return {
     end,
   },
   {
-    name = 'derived categories resolve and split like the user\'s',
+    name = 'derived categories resolve and split like the user\'s, nested by the seed',
     run = function()
       local derived = sourcesAt(FIXTURES).derived
       t.deepEq(derived.names, named{
-        [1] = { 'EQ' }, [3] = { 'Synth' }, [2] = { 'Filter' }, [5] = { 'Delay' },
-        [7] = { 'Tools' }, [13] = { 'Synth', 'Organ' },
-      }, 'derived names per key')
-      counts(derived, 6, 6, 1, 'derived')
+        [1] = { 'Effects/EQ' }, [3] = { 'Instruments/Synth' }, [2] = { 'Effects/Filter' },
+        [5] = { 'Effects/Delay' }, [7] = { 'Tools' }, [13] = { 'Instruments/Synth', 'Instruments/Organ' },
+        [4] = { 'Effects/Compressor', 'Vintage' },
+      }, 'seeded names nested, an unseeded name bare, a discarded name yields nothing')
+      t.eq(derived.names[ROWS[11].key], nil, 'a key whose names are all discarded is not covered')
+      counts(derived, 7, 8, 1, 'derived')
     end,
   },
   {
@@ -211,9 +218,10 @@ return {
       }, standing = { Kept = true } })
       fxCatalogue.import(ds, sources, { tree = true, derived = true }, 'augment')
       local entries = entriesOf(ds)
-      t.deepEq(entries[ROWS[1].key], { paths = set{ 'Held', 'Effects/EQ', 'EQ' }, usage = usage,
-        ports = { ins = 1, outs = 1 } }, 'tree and derived union with the held path')
-      t.deepEq(entries[ROWS[13].key], { paths = set{ 'Synth', 'Organ' } }, 'a derived-only key gains an entry')
+      t.deepEq(entries[ROWS[1].key], { paths = set{ 'Held', 'Effects/EQ' }, usage = usage,
+        ports = { ins = 1, outs = 1 } }, 'the tree\'s and the nested derived Effects/EQ converge beside the held path')
+      t.deepEq(entries[ROWS[13].key], { paths = set{ 'Instruments/Synth', 'Instruments/Organ' } },
+        'a derived-only key gains an entry')
       t.eq(entries[ROWS[12].key], nil, 'user categories were declined')
       t.deepEq(ds:get('fxCatalogue').standing, set{ 'Kept' }, 'standing untouched')
     end,

@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-10-02** — The seed nesting places a derived name one level under Effects, Instruments or
+  Tools, and maps a non-category (a channel layout, MIDI, a developer) to no path, over passing it
+  bare. It is applied when sources() builds the derived source, over at import, so the counts shown
+  before the choice are of what import writes; a key whose names are all discarded is not covered.
+  The lookup is exact, and the table holds the development install's derived names plus the VST3
+  subcategories missing there.
+
 - **2026-10-02** — Import takes back the table a sources() call returned, over re-reading the inis,
   so what it writes is exactly what the counts described. A developer name is written only to an
   entry holding none, in both modes, so augment keeps a held name and replace, clearing first,

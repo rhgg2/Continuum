@@ -56,17 +56,7 @@ Landed in `docs/fxCatalogue.md` § Import.
 
 ## The seed nesting
 
-1. The **seed nesting** maps derived category names to category paths,
-   and ships with Continuum. It places names such as `Reverb` and
-   `Compressor` under broader ones.
-
-1. Importing derived categories applies the seed nesting, filing a
-   plugin at the nested path in place of the bare name.
-
-1. A name the seed nesting does not hold is filed at its bare name.
-
-1. The seed nesting leaves no trace beyond the paths it writes, which
-   are renamed as any other path is.
+Landed in `docs/fxCatalogue.md` § The seed nesting.
 
 ## The picker
 

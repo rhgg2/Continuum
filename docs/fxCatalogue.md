@@ -1,10 +1,6 @@
 # fxCatalogue
 
-**The installed plugins, each under a catalogue key that names one
-plugin across an update moving its files, and a catalogue holding
-facts about each and the paths they are filed under.** Its only state is a session memo of parsed JSFX
-descriptions (§ Traits). It re-reads REAPER's installed set on every
-call, and the catalogue is a dataStore key.
+**A catalogue holding facts about the installed plugins.**
 
 ## The catalogue key
 
@@ -63,7 +59,8 @@ call, and the catalogue is a dataStore key.
 1. An entry holds facts about its plugin: its audio ports, its usage
    score, any authored traits, its category paths (§ The taxonomy), a
    favourite flag and a developer name.
-   The facts are independent. An entry may carry any of them and lack
+
+1. The facts are independent. An entry may carry any of them and lack
    the rest, and a write to one leaves the others alone.
 
 1. Adding a plugin to the wiring graph (`docs/wiring.md`) is a **use**
@@ -214,7 +211,7 @@ call, and the catalogue is a dataStore key.
 
 1. **Derived categories** are `reaper-fxtags.ini` `[category]`: one or
    more names per plugin separated by `|`, written by REAPER at scan
-   time.
+   time. The source yields them nested (§ The seed nesting).
 
 1. **Developers** are `reaper-fxtags.ini` `[developer]`: one
    manufacturer name per plugin. A developer name filters, and is never
@@ -257,6 +254,29 @@ call, and the catalogue is a dataStore key.
    **covers**, the distinct names it yields, and the references it
    dropped. A plugin is covered where the source gives it a name, and
    for user folders also where it is a favourite.
+
+## The seed nesting
+
+1. The **seed nesting** maps derived category names to category paths,
+   and ships with Continuum. It places a name one level under
+   `Effects`, `Instruments` or `Tools`, so `Compressor` becomes
+   `Effects/Compressor` and `Synth` becomes `Instruments/Synth`.
+
+1. The seed nesting maps a name that classifies no plugin to no path.
+   Channel layouts such as `Stereo` and `Ambisonics`, `MIDI`, and a
+   developer's name are such names.
+
+1. The derived source yields each name as the seed nesting maps it, so
+   import files a plugin at the nested path in place of the bare name.
+   The source's counts are of the paths it yields, and a plugin whose
+   names all map to no path is not covered.
+
+1. A name the seed nesting does not hold is yielded at its bare name.
+   A name matches only as given (§ The taxonomy), so `reverb` is not
+   held where `Reverb` is.
+
+1. The seed nesting leaves no trace beyond the paths it writes, which
+   are renamed as any other path is.
 
 ## Import
 
