@@ -4,6 +4,10 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-10-02** — fx picker: unfiled is offered as no place. A child place is a category path, so
+  unfiled has no spelling the text could name, and any reserved spelling is also a legal user path.
+  An unfiled plugin is reached from the root by its name.
+
 - **2026-10-02** — The fx picker's text is a path, completed vertico-style — Tab or Enter inserts
   the place under the cursor — over a collapsible tree, since one rule computes the list from the
   text alone. A place lists every plugin below it once, so typing from the root reaches any plugin

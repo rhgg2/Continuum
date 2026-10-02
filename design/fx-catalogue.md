@@ -94,8 +94,9 @@ Landed in `docs/fxCatalogue.md` § The seed nesting.
 1. A plugin's name is the name REAPER reports, which carries its format
    and developer — `VST3: Pro-Q 3 (FabFilter)`.
 
-1. Child places keep the category list's order (`docs/fxCatalogue.md`
-   § The taxonomy).
+1. Child places are category paths, in the category list's order
+   (`docs/fxCatalogue.md` § The taxonomy). An unfiled plugin is thus
+   reached from the root, by its name.
 
 1. Plugins sort with those in the project first, then by usage score,
    then by name ignoring case. A plugin is **in the project** where an
@@ -204,9 +205,6 @@ Landed in `docs/fxCatalogue.md` § The seed nesting.
 1. Whether `[deleted_categories]` should suppress a name at import.
    The list records the user's own hiding, which bears on the user
    categories and the derived ones differently.
-
-1. Whether an entry's developer name is worth holding, given that the
-   name REAPER reports already carries it.
 
 1. How LV2 is handled. A category key may name an LV2 plugin by URI
    while `EnumInstalledFX` reports no LV2 at all, so classification can
