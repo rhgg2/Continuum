@@ -30,10 +30,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-10-03 fxCatalogue: unfiled sits at the root (design § Unfiled)
 - 2026-10-02 fxCatalogue: file favourites under a path, dropping the flag (§ Favourites)
 - 2026-10-02 fxCatalogue: nest derived categories by the seed (§ The seed nesting)
 - 2026-10-02 fxCatalogue: import the chosen sources (§ Import)
-- 2026-10-02 fxCatalogue: read the sources, resolved to catalogue keys (§ The sources)
 
 ## Now
 
@@ -41,11 +41,6 @@
 
 ## Queued (current phase; one-liners)
 
-- fxCatalogue: unfiled sits at the root (§ Unfiled) — `categories()`
-  returns paths alone and the `UNFILED` sentinel goes;
-  `docs/fxCatalogue.md` § The taxonomy takes a place as the root or a
-  listed path, with an unfiled plugin at the root. Spec:
-  fxCatalogue_spec's category-list cases drop the sentinel.
 - fxCatalogue: the picker's list as a function of its text (§ The picker
   3–10, 14–15) — split at the last `/` into current place and stem;
   the place resolves exact, else to the one case-insensitive match,

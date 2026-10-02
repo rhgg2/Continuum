@@ -138,9 +138,6 @@ end
 
 ----- Taxonomy: see docs/fxCatalogue.md § The taxonomy
 
---invariant: UNFILED is compared by identity; it is returned, never stored
-fxCatalogue.UNFILED = {}
-
 local function isPath(name) return not ('/' .. name .. '/'):find('//', 1, true) end
 
 local function checkPath(path)
@@ -164,7 +161,6 @@ local function listedPaths(catalogue)
 end
 
 --post: fresh; each listed path once, name by name ignoring case, the raw string breaking a tie
---post: UNFILED last
 function fxCatalogue.categories(ds)
   local paths   = util.keys(listedPaths(load(ds)))
   local sortKey = {}
@@ -173,7 +169,6 @@ function fxCatalogue.categories(ds)
     if sortKey[a] ~= sortKey[b] then return sortKey[a] < sortKey[b] end
     return a < b
   end)
-  util.add(paths, fxCatalogue.UNFILED)
   return paths
 end
 

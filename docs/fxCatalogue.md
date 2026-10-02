@@ -152,21 +152,23 @@
    The catalogue holds the standing paths beside its entries. A
    standing path stands whether or not anything is filed under it.
 
-1. The **category list** holds three kinds of thing:
-
-   - every path an entry names, with those paths' prefixes — `Effects`
-     and `Effects/Reverb` wherever `Effects/Reverb/Plate` is;
-   - every standing path, with its prefixes;
-   - **unfiled**, which is no path but stands in the list beside them.
+1. The **category list** holds every path an entry names, with those
+   paths' prefixes — `Effects` and `Effects/Reverb` wherever
+   `Effects/Reverb/Plate` is — and every standing path, with its
+   prefixes.
 
 1. The list orders its paths name by name, ignoring case, so a path
    follows its parent. Two paths differing only in case order by their
-   bytes. Unfiled comes last.
+   bytes.
 
-1. A **place** is an entry in the category list.
+1. A **place** is the root or a path in the category list.
 
-1. A plugin is unfiled where its key has no entry, or where its entry
-   carries no category path. A newly installed plugin is thus unfiled.
+1. A plugin is **unfiled** where its key has no entry, or where its
+   entry carries no category path. A newly installed plugin is thus
+   unfiled.
+
+1. A plugin sits **at** each path it is filed under. An unfiled plugin
+   sits at the root.
 
 1. Renaming a path rewrites it in every entry naming it, among the
    standing paths, and in its descendants. A path renamed onto one that

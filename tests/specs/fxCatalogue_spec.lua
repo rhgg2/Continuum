@@ -21,8 +21,7 @@
 -- not held changes nothing. makePath adds a standing path, listed whether or
 -- not anything is filed under it. categories lists every path an entry names
 -- or standing holds, with each one's prefixes, once each, ordered name by name
--- ignoring case so a path follows its parent; UNFILED, a sentinel compared by
--- identity, comes last. renamePath rewrites a listed path and its descendants,
+-- ignoring case so a path follows its parent. renamePath rewrites a listed path and its descendants,
 -- matching whole names, everywhere it is held, and merges onto a path that
 -- exists. A path with an empty name raises, and a catalogue persisted before
 -- standing paths existed reads as one with none. None of these consults the
@@ -130,8 +129,6 @@ local function parse(content)
 end
 
 local function catalogueOf(entries) return { n = 0, entries = entries } end
-
-local UNFILED = fxCatalogue.UNFILED
 
 local function pathsOf(ds, key) return ds:get('fxCatalogue').entries[key].paths end
 
@@ -332,7 +329,7 @@ return {
       t.eq(entry.paths, nil, 'one form for no paths')
       t.deepEq(entry.ports, { ins = 1, outs = 2 })
       t.truthy(entry.usage, 'usage kept')
-      t.deepEq(fxCatalogue.categories(ds), { UNFILED }, 'the path was named only by the entry')
+      t.deepEq(fxCatalogue.categories(ds), {}, 'the path was named only by the entry')
     end,
   },
   {
@@ -368,7 +365,7 @@ return {
     run = function()
       local ds = harness.mk().ds
       fxCatalogue.makePath(ds, 'Effects/Delay')
-      local MADE = { 'Effects', 'Effects/Delay', UNFILED }
+      local MADE = { 'Effects', 'Effects/Delay' }
       t.deepEq(fxCatalogue.categories(ds), MADE)
       fxCatalogue.file(ds, 'a', 'Effects/Delay')
       fxCatalogue.unfile(ds, 'a', 'Effects/Delay')
@@ -376,7 +373,7 @@ return {
     end,
   },
   {
-    name = 'categories lists named and standing paths with their prefixes once, name by name ignoring case, then unfiled',
+    name = 'categories lists named and standing paths with their prefixes once, name by name ignoring case',
     run = function()
       local _, ds = seed(ROWS)
       for _, row in ipairs(fxCatalogue.installed()) do
@@ -388,7 +385,7 @@ return {
       fxCatalogue.file(ds, 'Aeolus.vst3', 'Synth')
       fxCatalogue.makePath(ds, 'Effects/Delay')
       t.deepEq(fxCatalogue.categories(ds), { 'Effects', 'Effects/Delay', 'Effects/Reverb',
-        'Effects/Reverb/Plate', 'effects b', 'Synth', UNFILED })
+        'Effects/Reverb/Plate', 'effects b', 'Synth' })
     end,
   },
   {
@@ -397,15 +394,14 @@ return {
       local ds = harness.mk().ds
       fxCatalogue.file(ds, 'a', 'reverb')
       fxCatalogue.file(ds, 'b', 'Reverb')
-      t.deepEq(fxCatalogue.categories(ds), { 'Reverb', 'reverb', UNFILED })
+      t.deepEq(fxCatalogue.categories(ds), { 'Reverb', 'reverb' })
     end,
   },
   {
-    name = 'categories of an empty store is unfiled alone, the sentinel itself',
+    name = 'categories of an empty store lists nothing',
     run = function()
       local list = fxCatalogue.categories(harness.mk().ds)
-      t.eq(#list, 1)
-      t.eq(list[1], UNFILED, 'by identity')
+      t.deepEq(list, {})
     end,
   },
   {
@@ -447,7 +443,7 @@ return {
       local ds = harness.mk().ds
       fxCatalogue.file(ds, 'a', 'Effects/Reverb/Plate')
       fxCatalogue.renamePath(ds, 'Effects/Reverb', 'Space/Reverb')
-      t.deepEq(fxCatalogue.categories(ds), { 'Space', 'Space/Reverb', 'Space/Reverb/Plate', UNFILED })
+      t.deepEq(fxCatalogue.categories(ds), { 'Space', 'Space/Reverb', 'Space/Reverb/Plate' })
     end,
   },
   {
@@ -462,7 +458,7 @@ return {
       local catalogue = ds:get('fxCatalogue')
       t.deepEq(catalogue.entries.a.paths, { Reverb = true })
       t.deepEq(catalogue.entries.b.paths, { ['Reverb/Plate'] = true })
-      t.deepEq(fxCatalogue.categories(ds), { 'Reverb', 'Reverb/Plate', UNFILED })
+      t.deepEq(fxCatalogue.categories(ds), { 'Reverb', 'Reverb/Plate' })
     end,
   },
   {
@@ -495,9 +491,9 @@ return {
     run = function()
       local ds = harness.mk().ds
       ds:assign('fxCatalogue', { n = 0, entries = { a = { paths = { Synth = true } } } })
-      t.deepEq(fxCatalogue.categories(ds), { 'Synth', UNFILED })
+      t.deepEq(fxCatalogue.categories(ds), { 'Synth' })
       fxCatalogue.makePath(ds, 'Effects')
-      t.deepEq(fxCatalogue.categories(ds), { 'Effects', 'Synth', UNFILED })
+      t.deepEq(fxCatalogue.categories(ds), { 'Effects', 'Synth' })
       fxCatalogue.recordUse(ds, 'a', { ins = 1, outs = 1 })
       t.eq(ds:get('fxCatalogue').n, 1)
     end,
