@@ -1639,13 +1639,13 @@ local function soleDragged(nodeViews, d)
   end
 end
 
--- Splice-on-drop target: among the audio triangles the dragged body covers, the
+-- Splice-on-drop target: among the triangles the dragged body covers, the
 -- nearest spliceable one to the cursor. See docs/wiringPage.md § Splice on drop.
 local function spliceTargetHit(segs, nv, mx, my)
   local box = nodeBox(nv)
   local best, bestDist
   for i, seg in pairs(segs) do
-    if seg.w.type == 'audio' and inRect(seg.cx, seg.cy, box) then
+    if inRect(seg.cx, seg.cy, box) then
       local dx, dy = seg.cx - mx, seg.cy - my
       local dist   = dx * dx + dy * dy
       if (not bestDist or dist < bestDist) and wv:spliceable(i, nv.id) then
@@ -1931,7 +1931,7 @@ local function buildGeometry(frame)
   for _, seg in pairs(segs) do seg.cx, seg.cy = wireMid(seg) end
   frame.segs, frame.busRails, frame.matrixRails = segs, busRails, matrixRails
 
-  -- A lone node dragged over an audio wire's triangle splices into that wire on
+  -- A lone node dragged over a wire's triangle splices into that wire on
   -- release, and the whole wire highlights meanwhile.
   if gesture and gesture.mode == 'nodeDrag' then
     frame.spliceNode = soleDragged(frame.nodeViews, gesture)

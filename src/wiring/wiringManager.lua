@@ -716,17 +716,18 @@ function wm:insertBus(spec)
   return newId
 end
 
---contract: true iff nodeId may splice into edges[edgeIdx]: pair 1 free, off both ends, no loop
+--post: true iff nodeId has a free first in and out of the wire's type, is off both ends, no loop
 function wm:spliceable(edgeIdx, nodeId)
   ensureLoaded()
   local edge = userGraph.edges[edgeIdx]
   local node = userGraph.nodes[nodeId]
-  if not (edge and node) or edge.type ~= 'audio' then return false end
+  if not (edge and node) then return false end
   if nodeId == edge.from or nodeId == edge.to then return false end
-  local audio = node.ports.audio
-  if (audio.ins or 0) < 1 or (audio.outs or 0) < 1 then return false end
+  local ports = node.ports[edge.type]
+  if (ports.ins or 0) < 1 or (ports.outs or 0) < 1 then return false end
+  -- MIDI edges carry no ports, so for MIDI this reads "any MIDI wire at the node".
   for _, e in ipairs(userGraph.edges) do
-    if e.type == 'audio'
+    if e.type == edge.type
        and ((e.to   == nodeId and (e.toPort   or 1) == 1)
          or (e.from == nodeId and (e.fromPort or 1) == 1)) then
       return false
@@ -738,9 +739,9 @@ function wm:spliceable(edgeIdx, nodeId)
      and not reaches(reach.forward, edge.to, nodeId)
 end
 
---contract: re-points audio edges[edgeIdx] through nodeId's audio pair 1 and mints the output leg
---contract: the wire's gain rides the input side, the output leg is unity; node lands at pos
---contract: returns true, or nil+err when the splice isn't offered
+--post: re-points edges[edgeIdx] into nodeId's first in; a new leg of its type leaves the first out
+--post: the wire's ops ride the input side, the new leg has none; MIDI legs stay bare; node at pos
+--post: returns true, or nil+err when the splice isn't offered
 function wm:spliceIntoEdge(edgeIdx, nodeId, pos)
   if not self:spliceable(edgeIdx, nodeId) then
     return nil, { code = 'not_spliceable', edge = edgeIdx, id = nodeId }
@@ -749,9 +750,10 @@ function wm:spliceIntoEdge(edgeIdx, nodeId, pos)
   rm:transaction('wiring: splice ' .. (userGraph.nodes[nodeId].fxDisplay or 'fx'), function()
     ok, err = self:mutate(function(g)
       local edge = g.edges[edgeIdx]
+      local pair1 = edge.type == 'audio' and 1 or nil
       local toId, toPort = edge.to, edge.toPort
-      edge.to, edge.toPort = nodeId, 1
-      util.add(g.edges, { type = 'audio', from = nodeId, fromPort = 1,
+      edge.to, edge.toPort = nodeId, pair1
+      util.add(g.edges, { type = edge.type, from = nodeId, fromPort = pair1,
                           to = toId, toPort = toPort })
       local node = g.nodes[nodeId]
       node.pos.x, node.pos.y = pos.x, pos.y

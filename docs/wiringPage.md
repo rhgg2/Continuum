@@ -183,22 +183,23 @@ modes:
 ### Splice on drop
 
 A lone dragged node whose **body covers a wire's triangle** splices into
-that wire on mouseup: the wire re-points onto the node's audio pair 1, a
-fresh leg carries the signal on to the old destination, and the node
-snaps to the triangle it was dropped on. The wire's gain stays on the
-input side and the new leg is unity, so the splice changes only what the
-effect does — everything downstream hears the same level as before.
+that wire on mouseup: the wire re-points onto the node's first in of the
+wire's type, a fresh leg of that type carries the signal on from its
+first out to the old destination, and the node snaps to the triangle it
+was dropped on. On an audio wire the gain stays on the input side and
+the new leg is unity, so the splice changes only what the effect does —
+everything downstream hears the same level as before.
 
-The offer is made only where it can be taken (`wv:spliceable`): the node
-needs a free audio pair 1 both ways, it can't be either end of the wire,
-and it can't already sit downstream of it. Eligible or not decides the
+The offer is made only where it can be taken (`wv:spliceable`): over
+audio the node needs a free audio pair 1 both ways, over MIDI an unwired
+midi in and midi out. Either way it can't be either end of the wire, and
+it can't already sit downstream of it over any wire type. Eligible or not decides the
 highlight as well as the commit, so an unhighlighted wire is a promise of
 nothing and the drop is a plain move. The whole target wire highlights,
 drawn in the wire layer rather than over the node pass: the bodies at its
 ends and the dragged body itself overpaint it, so the highlight reads as
 a wire and not as an overlay. Where the body covers several triangles the
-one nearest the cursor wins. Audio only — MIDI wires carry no gain, so a MIDI splice
-would be its own gesture.
+one nearest the cursor wins.
 
 ### The wire end leads the cursor
 

@@ -30,10 +30,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-10-03 wm: splice over either wire type (§ The splice)
 - 2026-10-03 fxCatalogue: filter picker rows by need and hide empty places (§ The filtering seam)
 - 2026-10-03 wiring: make the fx picker path completion over the catalogue (design § The picker)
 - 2026-10-03 fxCatalogue: the picker's list as a function of its text (§ The picker 3–10, 14–15)
-- 2026-10-03 fxCatalogue: unfiled sits at the root (design § Unfiled)
 
 ## Now
 
@@ -41,19 +41,15 @@
 
 ## Queued (current phase; one-liners)
 
-- wiringManager: splice over either wire type (§ The splice) —
-  `wm:spliceable` and `wm:spliceIntoEdge` re-point a wire into the
-  node's first in of its type and add a leg from the first out; audio
-  needs free pair 1 both ways and keeps its gain on the input side, MIDI
-  needs an unwired midi in and midi out. Splice on drop takes MIDI wires
-  too; `docs/wiringPage.md` § Splice on drop follows. Spec:
-  wm_splice_spec.
 - wiringRender: **splice** from **Insert fx…** (§ Opening the picker 1,
   3, 9) — the wire menu gains the item; the picker opens at the wire's
   triangle in the splice context of the wire's type, and the pick adds
   the plugin on the triangle and splices it in as one undo step. Settles
   how wm composes add-then-wire under one transaction, which the next
-  two reuse.
+  two reuse. MIDI wires have no wire menu today: the right-click
+  triangle hit `arrowMidHit` (`wiringRender.lua:1120-1130`) is
+  audio-only because it doubles as the fader's hit, so the menu hit
+  must widen to MIDI while the fader stays audio.
 - wiringManager: **replace** from **Replace…** (§ Opening the picker 8–9)
   — the node menu gains the item, opening the picker in the replace
   context with the node's wires as the set to cover; the pick puts the
