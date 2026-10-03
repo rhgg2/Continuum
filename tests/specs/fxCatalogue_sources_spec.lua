@@ -4,8 +4,9 @@
 --
 -- The install tree reads the ident: a VST's directories below the deepest
 -- reaper.ini vstpath root holding it (a root matches whole, so .../VST is no
--- root of .../VST3/...), a JSFX's directories below Effects. A plugin directly
--- at a root, a VST under none, an AU or a CLAP has no tree name.
+-- root of .../VST3/...). A plugin directly at a root, a VST under none, an AU,
+-- a CLAP or a JSFX has no tree name: a JSFX's directory may name a category,
+-- an author or a package, so it classifies nothing.
 --
 -- A category or developer key resolves to the installed key equal to it, else
 -- to every JSFX whose file name it is, else to either ignoring case; nothing
@@ -108,26 +109,23 @@ end
 
 return {
   {
-    name = 'the install tree names a VST below its deepest whole root, and a JSFX below Effects',
+    name = 'the install tree names a VST below its deepest whole root, and no JSFX',
     run = function()
       local sources = sourcesAt(FIXTURES)
       t.eq(sources.installed, #ROWS, 'installed is the installed-set size')
       t.deepEq(sources.tree.names, named{
         [1] = { 'Effects/EQ' }, [2] = { 'Effects/Filter' }, [5] = { 'Effects/Delay' },
-        [6] = { 'Dynamics' }, [7] = { 'loser' }, [8] = { 'guitar' }, [9] = { 'utility' },
-        [10] = { 'old' }, [14] = { 'Generators/Analogue' },
-      }, 'one directory path per plugin under a root; none at a root, under none, or AU/CLAP')
-      counts(sources.tree, 9, 9, 0, 'tree')
+        [6] = { 'Dynamics' }, [14] = { 'Generators/Analogue' },
+      }, 'every directory below a root; none at a root, under none, or AU/CLAP/JSFX')
+      counts(sources.tree, 5, 5, 0, 'tree')
     end,
   },
   {
-    name = 'the install tree keeps every directory, and a root matches only as a whole directory',
+    name = 'an install-tree root matches only as a whole directory',
     run = function()
-      local nested  = { name = 'JS: Mixer 8', ident = 'IX/Mixer/mix8', key = 'IX/Mixer/mix8' }
       local outside = { name = 'VST3: Old (Archive)', ident = '/Volumes/PluginsArchive/Dynamics/Old.vst3',
                         key = 'Old.vst3' }
-      local tree = sourcesAt(FIXTURES, { nested, outside }).tree
-      t.deepEq(tree.names[nested.key], set{ 'IX/Mixer' }, 'a nested JSFX keeps both directories')
+      local tree = sourcesAt(FIXTURES, { outside }).tree
       t.truthy(tree.names[ROWS[6].key], 'the /Volumes/Plugins roots are read')
       t.eq(tree.names[outside.key], nil, '/Volumes/PluginsArchive is under no root')
     end,
@@ -192,18 +190,15 @@ return {
     end,
   },
   {
-    name = 'missing inis read as empty sources, and the tree still reads JSFX directories',
+    -- With no reaper.ini there are no vstpath roots, so the tree is empty too.
+    name = 'missing inis read as empty sources',
     run = function()
       local sources = sourcesAt(specDir)
-      for _, label in ipairs{ 'user', 'folders', 'derived', 'developers' } do
+      for _, label in ipairs{ 'tree', 'user', 'folders', 'derived', 'developers' } do
         t.deepEq(sources[label].names, {}, label .. ' names')
         counts(sources[label], 0, 0, 0, label)
       end
       t.deepEq(sources.user.standing, {}, 'no standing paths')
-      t.deepEq(sources.tree.names, named{
-        [7] = { 'loser' }, [8] = { 'guitar' }, [9] = { 'utility' }, [10] = { 'old' },
-      }, 'JSFX directories need no file')
-      counts(sources.tree, 4, 4, 0, 'tree')
     end,
   },
   {

@@ -345,9 +345,9 @@ local function vstRoots(settings)
   return roots
 end
 
--- A row's install-tree name: its ident's directories below the deepest root holding it.
+-- A VST row's install-tree name: its ident's directories below the deepest root holding it.
+-- No other format has one; see docs/fxCatalogue.md § The sources.
 local function treeName(row, roots)
-  if row.format == 'JS' then return row.ident:match('^(.*)/[^/]*$') end
   if not isVst(row.format) then return nil end
   local deepest
   for _, root in ipairs(roots) do

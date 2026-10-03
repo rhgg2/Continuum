@@ -4,6 +4,11 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-10-03** — JSFX have no install tree. The directory under the effects directory names a
+  category for REAPER's stock set, but an author or a package for others', so it classifies nothing.
+  Rejected: a `JS/<dir>` place, since REAPER's own browser lists JSFX by name with no path; and a
+  shipped map of the stock directories.
+
 - **2026-10-03** — The fx picker's list is a pure fxCatalogue function of the text, the installed
   rows, the catalogue and the in-project keys. Rows the caller passes lead the root's plugins, which
   is how the busses reach it, over fxCatalogue knowing of busses. Whether the busses instead become

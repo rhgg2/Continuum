@@ -186,13 +186,13 @@
    it. There are five, across two of REAPER's files and the idents
    themselves. Reading them writes nothing.
 
-1. The **install tree** is the directory structure the plugins sit
+1. The **install tree** is the directory structure the VSTs sit
    under, read from the ident. Its depth varies by installation.
 
 1. A VST's plugin roots are the paths each VST path key in
-   `reaper.ini` lists, one key per architecture. A JSFX's root is the
-   effects directory. A root holds a plugin only as a whole directory,
-   so `Plug-Ins/VST` does not hold what sits under `Plug-Ins/VST3`.
+   `reaper.ini` lists, one key per architecture. A root holds a plugin
+   only as a whole directory, so `Plug-Ins/VST` does not hold what sits
+   under `Plug-Ins/VST3`.
 
 1. Where roots nest, a plugin sits under the deepest one holding it.
 
@@ -200,6 +200,10 @@
    joined by `/`. A plugin directly at a root has none, and neither has
    a VST under no root. An AU or CLAP ident names no directory, so
    neither format has an install tree.
+
+1. A JSFX has no install tree either. The directory under the effects
+   directory names a category for REAPER's own JSFX, but an author or a
+   package for others', so it classifies nothing.
 
 1. **User categories** are `reaper-fxfolders.ini` `[category]`: one or
    more names per plugin separated by `|`, written where the user
