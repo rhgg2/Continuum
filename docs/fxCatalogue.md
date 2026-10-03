@@ -321,3 +321,61 @@
 
 1. Where several developer names resolve to one key, the
    lowest-sorting by bytes is written.
+
+## The picker's list
+
+1. The **picker's list** offers the installed plugins for one pick,
+   and depends on a text alone. The text is a path: the part before the
+   last `/` is the **current place**, and the part after it is the
+   **stem**.
+
+1. The current place resolves to the place spelled the same, else to
+   the one place spelled the same ignoring case. A current place
+   resolving to nothing lists nothing.
+
+1. A plugin is **below** a place where it is filed at that place or at
+   a path beneath it. Every installed plugin is below the root, filed
+   or not.
+
+1. The list holds the current place's child places whose names begin
+   with the stem, then the plugins below the current place whose names
+   contain it. Both match ignoring case. A plugin below the place
+   through several paths is listed once.
+
+1. A plugin's name is the name REAPER reports, which carries its format
+   and developer — `VST3: Pro-Q 3 (FabFilter)`.
+
+1. Child places keep the category list's order. Plugins sort with those
+   in the project first, then by usage score, then by name ignoring
+   case. A plugin is **in the project** where an instance of it sits in
+   the project's wiring graph.
+
+1. With no text, the root thus lists the top-level places and then
+   every plugin, ranked. An unfiled plugin is reached from the root, by
+   its name.
+
+1. Rows the caller supplies to lead the plugins are listed at the root
+   alone, and the stem narrows them by name as it does a plugin. The
+   wiring picker's busses are such rows (`docs/wiringPage.md` § The fx
+   picker).
+
+## Candidates
+
+1. A **need** is the least ports a plugin must carry to take a role in
+   the graph: counts of audio ins and outs, of midi in and of midi out.
+   A plugin whose ports cover the need is a **candidate**, and the
+   picker's list is built over candidates alone.
+
+1. Candidacy over audio reads the entry's audio ports, and candidacy
+   over MIDI the resolved traits (§ Traits).
+
+1. A plugin whose key has no entry, or whose entry holds no audio
+   ports, is **unprobed**. An unprobed plugin passes every audio test.
+
+1. A child place is listed only where a candidate is below it. Its path
+   typed in full still resolves, since resolution reads the category
+   list alone.
+
+1. A picked plugin that proves unable to take its wiring has still
+   recorded its ports (§ Audio ports), so the same need no longer
+   admits it.

@@ -237,7 +237,7 @@ function fxCatalogue.renamePath(ds, from, to)
   ds:assign('fxCatalogue', catalogue)
 end
 
------ Picker
+----- Picker: see docs/fxCatalogue.md § The picker's list
 
 -- The category path a place spelling names: '' the root, else the path spelled the same,
 -- else the one path spelled the same ignoring case; nil for none or several.
@@ -252,7 +252,7 @@ local function resolvePlace(paths, spelling)
 end
 
 --pre: catalogue as ds holds it (nil reads empty); rows installed() rows
--- Unprobed (no entry, or no ports) passes every audio count; see docs/fxCatalogue.md § Traits.
+-- Unprobed (no entry, or no ports) passes every audio count; see docs/fxCatalogue.md § Candidates.
 --post: fresh array of rows whose plugin covers need, in rows' order; catalogue and rows unwritten
 --post: traits resolve only for a need with a midi count, so otherwise no JSFX source is read
 function fxCatalogue.candidates(catalogue, rows, need)

@@ -61,7 +61,9 @@ under no name, are locked out for those frames.
 
 ## The fx picker
 
-1. The fx picker opens in a context, with its field empty and focused.
+1. The fx picker opens in a context, with its field empty and focused,
+   and lists only the context's candidates (`docs/fxCatalogue.md`
+   § Candidates).
    The new context opens at the cursor, from a right-click on empty
    canvas or `N`, over every installed plugin. The splice context opens
    from a wire menu's **Insert fx…**, at the wire's triangle, over only
@@ -73,7 +75,7 @@ under no name, are locked out for those frames.
    draft's ghost node, over only the plugins with an in of the draft's
    type (MIDI for a palette draft), and without the buss rows. Its text is a path
    being completed over the catalogue's places (`docs/fxCatalogue.md`
-   § The taxonomy): the list holds the current place's child places,
+   § The picker's list): the list holds the current place's child places,
    drawn `name/`, then, at the root only, the two buss rows, then the
    plugins below the place. A child place with no plugin below it is
    hidden, though typing its path still enters it.
