@@ -2733,12 +2733,15 @@ local BUS_ROWS = {
   { name = 'Buss (horizontal)', bus = true, orient = 'H' },
 }
 
+-- The need of a plugin that stands alone: every installed plugin is a candidate.
+local NEW_NEED = {}
+
 -- Both routes in (RMB, N key) read the cursor: the node lands under it and the
 -- popup anchors where the node lands, so the two agree even off-canvas.
 openFxPicker = function()
   local x, y = spawnPos()
   local sx, sy = sourcePosFor(x, y)
-  local source = wv:fxPickerSource()
+  local source = wv:fxPickerSource(NEW_NEED)
   popups.fx = {
     x = x, y = y, sx = sx, sy = sy,
     anchorSX = x + canvasOrigin.ox, anchorSY = y + canvasOrigin.oy,

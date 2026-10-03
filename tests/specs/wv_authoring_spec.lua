@@ -207,7 +207,7 @@ return {
       h.ds:assign('fxCatalogue', { n = 0, entries = { ['ReaEQ.vst3'] = { paths = { EQ = true } } } })
       t.truthy(wv:addFx(0, 0, EQ), 'precondition: ReaEQ is in the graph')
       local leading = { { name = 'Buss (vertical)', bus = true } }
-      local source  = wv:fxPickerSource()
+      local source  = wv:fxPickerSource({})
       local names = {}
       for _, item in ipairs(wv:fxPickerList(source, '', leading)) do util.add(names, item.name) end
       t.deepEq(names, { 'EQ', 'Buss (vertical)', EQ.name, COMP.name })

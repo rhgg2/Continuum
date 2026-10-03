@@ -2020,14 +2020,20 @@ end
 
 --shape: fxPickerSource = { rows=row[], catalogue=fxCatalogue|nil, inProject={ [catalogueKey]=true } }
 --post: fresh; inProject keys the graph's fx nodes only, so an instance outside the graph is absent
-function wm:fxPickerSource()
+--post: rows are fxCatalogue.candidates for need; inProject is computed over every installed row
+function wm:fxPickerSource(need)
   ensureLoaded()
   local ids = {}
   for _, node in pairs(userGraph.nodes) do
     if node.kind == 'fx' then ids[node.fxId] = true end
   end
-  local rows = rm:installedFx()
-  return { rows = rows, catalogue = rm:fxCatalogue(), inProject = rm:fxKeys(ids, rows) }
+  local rows      = rm:installedFx()
+  local catalogue = rm:fxCatalogue()
+  return {
+    rows      = fxCatalogue.candidates(catalogue, rows, need),
+    catalogue = catalogue,
+    inProject = rm:fxKeys(ids, rows),
+  }
 end
 
 --contract: rereads the graph from routing when REAPER's project state moved without us — undo/redo

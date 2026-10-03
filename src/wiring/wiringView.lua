@@ -157,7 +157,7 @@ function wv:deleteSource(nodeId, force)
   return wm:deleteSource(nodeId, force)
 end
 
-function wv:fxPickerSource() return wm:fxPickerSource() end
+function wv:fxPickerSource(need) return wm:fxPickerSource(need) end
 
 --post: fxCatalogue.pickerList over the source's catalogue, rows and inProject
 function wv:fxPickerList(source, text, leading)

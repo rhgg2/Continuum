@@ -66,7 +66,8 @@ under no name, are locked out for those frames.
    being completed over the catalogue's places (`docs/fxCatalogue.md`
    § The taxonomy): the list holds the current place's child places,
    drawn `name/`, then, at the root only, the two buss rows, then the
-   plugins below the place.
+   plugins below the place. A child place with no plugin below it is
+   hidden, though typing its path still enters it.
 
 1. Tab or Enter on a place descends into it: the text becomes the
    place's path and a `/`, and the field keeps focus. A click on a place

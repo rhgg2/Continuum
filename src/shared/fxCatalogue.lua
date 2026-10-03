@@ -11,6 +11,7 @@
 --shape: sources = { installed=int, tree=source, user=source+{ standing={ [path]=true } }, folders=source, derived=source, developers=source }  -- derived names nested by the seed
 --shape: source = { names={ [catalogueKey]={ [name]=true } }, covered=int, distinct=int, dropped=int }
 --shape: pickerItem = { place=path, name=string } | row  -- a place and its last name, or the caller's own row; told apart by place
+--shape: need = { audio?={ ins?=int, outs?=int }, midi?={ ins?=0|1, outs?=0|1 } }  -- least ports; absent = 0
 
 local util = require 'util'
 local fs   = require 'fs'
@@ -250,9 +251,30 @@ local function resolvePlace(paths, spelling)
   return #matches == 1 and matches[1] or nil
 end
 
+--pre: catalogue as ds holds it (nil reads empty); rows installed() rows
+-- Unprobed (no entry, or no ports) passes every audio count; see docs/fxCatalogue.md § Traits.
+--post: fresh array of rows whose plugin covers need, in rows' order; catalogue and rows unwritten
+--post: traits resolve only for a need with a midi count, so otherwise no JSFX source is read
+function fxCatalogue.candidates(catalogue, rows, need)
+  local entries = defaulted(catalogue).entries
+  local audio, midi = need.audio or {}, need.midi or {}
+  local function covers(have, want)
+    return have.ins >= (want.ins or 0) and have.outs >= (want.outs or 0)
+  end
+  local asksMidi = (midi.ins or 0) > 0 or (midi.outs or 0) > 0
+  return util.filter(rows, function(row)
+    local ports = (entries[row.key] or {}).ports
+    if ports and not covers(ports, audio) then return false end
+    if not asksMidi then return true end
+    local traits = fxCatalogue.traits(catalogue, row.format, row.key)
+    return covers({ ins = traits.midiIn and 1 or 0, outs = traits.midiOut and 1 or 0 }, midi)
+  end)
+end
+
 --pre: catalogue as ds holds it (nil reads empty); rows installed() rows; leading rows with a name
 --post: fresh, the catalogue and rows unwritten; {} when the text's place resolves to no path
 --post: child places beginning with the stem, leading (root only), then ranked plugins containing it
+--post: a child place lists only where some row passed in is below it; resolution ignores rows
 function fxCatalogue.pickerList(catalogue, rows, inProject, text, leading)
   catalogue = defaulted(catalogue)
   local paths = categoryList(catalogue)
@@ -264,10 +286,23 @@ function fxCatalogue.pickerList(catalogue, rows, inProject, text, leading)
   local function contains(name) return name:lower():find(stem, 1, true) ~= nil end
   local under = place == '' and '' or place .. '/'
 
+  -- Every path some row is filed at or beneath: its entry paths and their prefixes.
+  local inhabited = {}
+  for _, row in ipairs(rows) do
+    local entry = catalogue.entries[row.key]
+    for path in pairs(entry and entry.paths or {}) do
+      local prefix
+      for name in path:gmatch('[^/]+') do
+        prefix = prefix and prefix .. '/' .. name or name
+        inhabited[prefix] = true
+      end
+    end
+  end
+
   local places = {}
   for _, path in ipairs(paths) do
     local name = path:sub(#under + 1)
-    if path:sub(1, #under) == under and not name:find('/', 1, true)
+    if inhabited[path] and path:sub(1, #under) == under and not name:find('/', 1, true)
        and name:lower():sub(1, #stem) == stem then
       util.add(places, { place = path, name = name })
     end

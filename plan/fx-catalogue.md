@@ -30,10 +30,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-10-03 fxCatalogue: filter picker rows by need and hide empty places (§ The filtering seam)
 - 2026-10-03 wiring: make the fx picker path completion over the catalogue (design § The picker)
 - 2026-10-03 fxCatalogue: the picker's list as a function of its text (§ The picker 3–10, 14–15)
 - 2026-10-03 fxCatalogue: unfiled sits at the root (design § Unfiled)
-- 2026-10-02 fxCatalogue: file favourites under a path, dropping the flag (§ Favourites)
 
 ## Now
 
@@ -41,13 +41,6 @@
 
 ## Queued (current phase; one-liners)
 
-- fxCatalogue: candidates by context (§ The filtering seam) — a
-  predicate over a plugin's resolved traits and ports for **new**,
-  **splice** (in and out of the wire's type), **branch** (an in of the
-  port's type) and **replace** (its ports cover a stated set of wires:
-  audio pair *k* per side, midi in, midi out); an unprobed plugin passes
-  every audio test. The list offers only candidates and hides a place
-  with none below it. Spec beside the list function's.
 - wiringManager: splice over either wire type (§ The splice) —
   `wm:spliceable` and `wm:spliceIntoEdge` re-point a wire into the
   node's first in of its type and add a leg from the first out; audio

@@ -11,8 +11,12 @@
 -- below the place whose names contain the stem. All matching ignores case and
 -- reads the stem plainly. A plugin is below a place where an entry path of its
 -- equals the place or lies beneath it; every installed plugin is below the
--- root, filed or not, and one below by several paths is listed once. An entry
--- no installed row carries is never listed, though its paths are places.
+-- root, filed or not, and one below by several paths is listed once. A child
+-- place lists only where some row passed in is below it, so a standing place
+-- with nothing filed, or one only uninstalled entries fill, is hidden; the
+-- rows passed in may be a subset (the candidates), and hiding follows them.
+-- A hidden place still resolves when typed. An entry no installed row
+-- carries is never listed.
 --
 -- Plugins rank in-project first, then by usage score decayed to the
 -- catalogue's current count, then by name ignoring case. A place item is
@@ -64,8 +68,9 @@ local function concat(...)
   return out
 end
 
--- Effects filed directly and by children; instruments only a prefix; Tools
--- standing; Effects Rack shares Effects' spelling up to a space; Cold Plate unfiled.
+-- Effects filed directly and by children; instruments only a prefix; Effects Rack
+-- shares Effects' spelling up to a space; Cold Plate unfiled. Tools, Effects/Dynamics
+-- and Effects/Reverb/Plate stand with nothing filed, so are hidden wherever listed.
 local function taxonomy(ds)
   fxCatalogue.file(ds, 'demo/amber', 'Effects/Reverb')
   fxCatalogue.file(ds, 'demo/brisk', 'Effects')
@@ -78,7 +83,7 @@ local function taxonomy(ds)
   fxCatalogue.makePath(ds, 'Effects/Reverb/Plate')
 end
 
-local TOP = { 'place:Effects', 'place:Effects Rack', 'place:instruments', 'place:Tools' }
+local TOP = { 'place:Effects', 'place:Effects Rack', 'place:instruments' }
 
 return {
   {
@@ -96,8 +101,8 @@ return {
       local bus = { name = 'Bus: new' }
       local got = list('', {}, { bus })
       t.deepEq(labels(got), concat(TOP, { 'Bus: new' }, BY_NAME))
-      t.eq(got[5], bus, 'the leading row is the caller\'s table')
-      local row = got[6]
+      t.eq(got[#TOP + 1], bus, 'the leading row is the caller\'s table')
+      local row = got[#TOP + 2]
       local found = false
       for _, r in ipairs(rows) do found = found or r == row end
       t.truthy(found, 'a plugin item is the caller\'s row table')
@@ -123,11 +128,10 @@ return {
     run = function()
       local list = picker(taxonomy)
       t.deepEq(labels(list('Effects/', {}, { { name = 'Bus: new' } })),
-        { 'place:Effects/Dynamics', 'place:Effects/Reverb',
-          'JS: Amber Hall', 'JS: brisk Comp', 'JS: Echo Chamber' },
-        'no grandchild, no Effects Rack plugin, no unfiled plugin, no leading row')
-      t.deepEq(labels(list('Effects/Reverb/')),
-        { 'place:Effects/Reverb/Plate', 'JS: Amber Hall', 'JS: Echo Chamber' })
+        { 'place:Effects/Reverb', 'JS: Amber Hall', 'JS: brisk Comp', 'JS: Echo Chamber' },
+        'no grandchild, no empty Dynamics, no Effects Rack plugin, no unfiled plugin, no leading row')
+      t.deepEq(labels(list('Effects/Reverb/')), { 'JS: Amber Hall', 'JS: Echo Chamber' },
+        'the empty Plate is hidden')
       t.deepEq(labels(list('instruments/')), { 'place:instruments/Synth', 'JS: drift Synth' },
         'a place listed only as a prefix holds what is filed beneath it')
     end,
@@ -137,8 +141,7 @@ return {
     run = function()
       local list = picker(taxonomy)
       t.deepEq(labels(list('effects/')),
-        { 'place:Effects/Dynamics', 'place:Effects/Reverb',
-          'JS: Amber Hall', 'JS: brisk Comp', 'JS: Echo Chamber' },
+        { 'place:Effects/Reverb', 'JS: Amber Hall', 'JS: brisk Comp', 'JS: Echo Chamber' },
         'children carry the real spelling')
 
       local cased = picker(function(ds)
@@ -195,8 +198,8 @@ return {
         concat(TOP, { 'Bus: zeta', 'Bus: Alpha' }, BY_NAME), 'not reranked by name')
       t.deepEq(labels(list('ALPHA', {}, { zeta, alpha })), { 'Bus: Alpha' })
       t.deepEq(labels(list('t', {}, { zeta, alpha })),
-        { 'place:Tools', 'Bus: zeta', 'JS: drift Synth', 'JS: zesty Gate', 'VST3: Cold Plate (Acme)' },
-        'zeta contains t, Alpha does not')
+        { 'Bus: zeta', 'JS: drift Synth', 'JS: zesty Gate', 'VST3: Cold Plate (Acme)' },
+        'zeta contains t, Alpha does not; Tools begins with t but is empty')
       t.deepEq(labels(list('Tools/', {}, { zeta, alpha })), {}, 'no leading row away from the root')
     end,
   },
@@ -215,13 +218,35 @@ return {
     end,
   },
   {
-    name = 'an entry no installed row carries makes places but is never listed as a plugin',
+    name = 'an entry no installed row carries is never listed, nor are the places only it fills',
     run = function()
-      local list = picker(function(ds) fxCatalogue.file(ds, 'gone.vst3', 'Lost/Found') end)
+      local list, _, ds = picker(function(ds) fxCatalogue.file(ds, 'gone.vst3', 'Lost/Found') end)
+      t.truthy(ds:get('fxCatalogue').entries['gone.vst3'], 'precondition: the entry is filed')
       local inProject = { ['gone.vst3'] = true }
-      t.deepEq(labels(list('', inProject)), concat({ 'place:Lost' }, BY_NAME))
-      t.deepEq(labels(list('Lost/', inProject)), { 'place:Lost/Found' })
+      t.deepEq(labels(list('', inProject)), BY_NAME)
+      t.deepEq(labels(list('Lost/', inProject)), {})
       t.deepEq(labels(list('Lost/Found/', inProject)), {})
+    end,
+  },
+  {
+    -- The caller's rows are what is below: candidates narrow them, and hiding follows.
+    name = 'a place whose only plugins are absent from the rows passed in is hidden',
+    run = function()
+      local _, rows, ds = picker(taxonomy)
+      local function listOver(over, text)
+        return labels(fxCatalogue.pickerList(ds:get('fxCatalogue'), over, {}, text, {}))
+      end
+      t.deepEq(listOver(rows, ''), concat(TOP, BY_NAME),
+        'precondition: instruments lists, inhabited only through instruments/Synth')
+      local withoutDrift = util.filter(rows, function(row) return row.key ~= 'demo/drift' end)
+      t.eq(#withoutDrift, #rows - 1, 'precondition: drift is dropped')
+      t.deepEq(listOver(withoutDrift, ''),
+        { 'place:Effects', 'place:Effects Rack',
+          'JS: Amber Hall', 'JS: brisk Comp', 'JS: Echo Chamber', 'JS: zesty Gate', 'VST3: Cold Plate (Acme)' })
+      t.deepEq(listOver(withoutDrift, 'instruments/'), {}, 'typed, it lists nothing')
+      t.deepEq(listOver(withoutDrift, 'Effects/'),
+        { 'place:Effects/Reverb', 'JS: Amber Hall', 'JS: brisk Comp', 'JS: Echo Chamber' },
+        'a place another row fills still lists')
     end,
   },
 }

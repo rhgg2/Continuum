@@ -312,6 +312,7 @@ local specs = {
   'fxCatalogue_spec',
   'fxCatalogue_sources_spec',
   'fxCatalogue_picker_spec',
+  'fxCatalogue_candidates_spec',
   'wv_authoring_spec',
   'wv_fx_mute_spec',
   'wv_activate_spec',

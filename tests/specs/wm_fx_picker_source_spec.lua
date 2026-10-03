@@ -1,7 +1,8 @@
 -- wm:fxPickerSource gathers what the add-fx picker lists over (docs/wiringPage.md
 -- § The fx picker): the installed rows, the catalogue, and the catalogue keys of
 -- the plugins in the project. "In the project" means an instance in the wiring
--- graph — an fx REAPER holds that the graph does not count.
+-- graph — an fx REAPER holds that the graph does not count. The rows are the
+-- candidates for the need passed in; inProject is still over every installed row.
 local t    = require('support')
 local util = require('util')
 
@@ -51,7 +52,7 @@ return {
         if not row then return false end
         return true, row[1], row[2]
       end
-      local list = wm:fxPickerSource().rows
+      local list = wm:fxPickerSource({}).rows
       t.eq(#list, 3)
       t.eq(list[1].name,  'VST3: ReaEQ (Cockos)',   'name returned raw')
       t.eq(list[1].ident, '/Library/Audio/Plug-Ins/VST3/ReaEQ.vst3')
@@ -66,17 +67,17 @@ return {
     run = function(harness)
       local _, wm = mkWm(harness)
       reaper.EnumInstalledFX = function() return false end
-      t.eq(#wm:fxPickerSource().rows, 0)
+      t.eq(#wm:fxPickerSource({}).rows, 0)
     end,
   },
   {
     name = 'inProject holds exactly the catalogue keys of the graph\'s fx nodes',
     run = function(harness)
       local _, wm = mkWm(harness, { installed = { COMP, VOL, DELAY } })
-      t.deepEq(wm:fxPickerSource().inProject, {}, 'precondition: nothing in the project')
+      t.deepEq(wm:fxPickerSource({}).inProject, {}, 'precondition: nothing in the project')
       add(wm, COMP)
       add(wm, VOL)
-      t.deepEq(wm:fxPickerSource().inProject, { [COMP.key] = true, [VOL.key] = true })
+      t.deepEq(wm:fxPickerSource({}).inProject, { [COMP.key] = true, [VOL.key] = true })
     end,
   },
   {
@@ -89,7 +90,7 @@ return {
         if node.kind == 'fx' then onMaster = onMaster + 1 end
       end
       t.eq(onMaster, 1, 'precondition: the read surfaces the master fx as a node')
-      t.deepEq(wm:fxPickerSource().inProject, { [COMP.key] = true })
+      t.deepEq(wm:fxPickerSource({}).inProject, { [COMP.key] = true })
     end,
   },
   {
@@ -98,9 +99,9 @@ return {
       local _, wm = mkWm(harness, { installed = { COMP, VOL } })
       local compId = add(wm, COMP)
       add(wm, VOL)
-      t.truthy(wm:fxPickerSource().inProject[COMP.key], 'precondition: Comp counts while in the graph')
+      t.truthy(wm:fxPickerSource({}).inProject[COMP.key], 'precondition: Comp counts while in the graph')
       t.truthy(wm:mutate(function(g) g.nodes[compId] = nil end), 'precondition: the drop validates')
-      t.deepEq(wm:fxPickerSource().inProject, { [VOL.key] = true })
+      t.deepEq(wm:fxPickerSource({}).inProject, { [VOL.key] = true })
     end,
   },
   {
@@ -108,7 +109,24 @@ return {
     run = function(harness)
       local catalogue = { n = 3, entries = { [COMP.key] = { paths = { ['Dynamics'] = true } } } }
       local _, wm = mkWm(harness, { installed = { COMP }, catalogue = catalogue })
-      t.deepEq(wm:fxPickerSource().catalogue, catalogue)
+      t.deepEq(wm:fxPickerSource({}).catalogue, catalogue)
+    end,
+  },
+  {
+    name = 'rows are the need\'s candidates, while inProject names an in-graph plugin the need excludes',
+    run = function(harness)
+      local catalogue = { n = 0, entries = { [COMP.key] = { traits = { midiOut = false } } } }
+      local _, wm = mkWm(harness, { installed = { COMP, DELAY }, catalogue = catalogue })
+      add(wm, COMP)
+      local function keys(rows)
+        local out = {}
+        for _, row in ipairs(rows) do util.add(out, row.key) end
+        return out
+      end
+      t.deepEq(keys(wm:fxPickerSource({}).rows), { COMP.key, DELAY.key }, 'precondition: the empty need admits both')
+      local source = wm:fxPickerSource({ midi = { outs = 1 } })
+      t.deepEq(keys(source.rows), { DELAY.key })
+      t.deepEq(source.inProject, { [COMP.key] = true })
     end,
   },
 }
