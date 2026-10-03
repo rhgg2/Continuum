@@ -391,6 +391,12 @@ local function readFx(track, idx)
   }
 end
 
+-- The catalogue key of an instance whose ident fxIdentAt read: a JS key drops the 'JS:'.
+local function catalogueKeyOf(fxType, ident, rows)
+  local raw = fxType == 'JS' and ident:sub(4) or ident
+  return fxCatalogue.instanceKey(fxType, raw, rows)
+end
+
 -- One catalogue read per pass, and the installed set walked at most once: only a VST's
 -- key needs it. see docs/routingManager.md § Read cost.
 local function stampTraits(fxRecords)
@@ -398,8 +404,7 @@ local function stampTraits(fxRecords)
   local rows
   for _, fx in ipairs(fxRecords) do
     if not rows and fx.fxType:sub(1, 3) == 'VST' then rows = fxCatalogue.installed() end
-    local raw = fx.fxType == 'JS' and fx.ident:sub(4) or fx.ident
-    local key = fxCatalogue.instanceKey(fx.fxType, raw, rows)
+    local key = catalogueKeyOf(fx.fxType, fx.ident, rows)
     fx.traits = fxCatalogue.traits(catalogue, fx.fxType, key)
   end
 end
@@ -1095,6 +1100,27 @@ function rm:installedFx()
   end
   return rows
 end
+
+--pre: ids = { [fxGuid]=true }; rows are installedFx() rows, so no second installed walk
+--post: { [catalogueKey]=true } over the live instances among ids, from one walk of the tracks
+function rm:fxKeys(ids, rows)
+  local keys = {}
+  local function scan(track)
+    for idx = 0, reaper.TrackFX_GetCount(track) - 1 do
+      if ids[reaper.TrackFX_GetFXGUID(track, idx)] then
+        local fxType = fxTypeAt(track, idx)
+        local key = catalogueKeyOf(fxType, fxIdentAt(track, idx, fxType), rows)
+        if key then keys[key] = true end
+      end
+    end
+  end
+  local master = reaper.GetMasterTrack(PROJ)
+  if master then scan(master) end
+  for i = 0, reaper.CountTracks(PROJ) - 1 do scan(reaper.GetTrack(PROJ, i)) end
+  return keys
+end
+
+function rm:fxCatalogue() return ds:get('fxCatalogue') end
 
 function rm:transaction(label, fn)
   reaper.Undo_BeginBlock()

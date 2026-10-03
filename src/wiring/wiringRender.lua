@@ -136,7 +136,7 @@ local paletteSource = nil  -- nodeId the palette del button acts on; cleared whe
 
 -- The canvas popups. A slot holds a popup's live state while open: RMB
 -- dispatch and openFxPicker fill it, popupShell clears it when ImGui closes it.
---shape: popups = { wire = { edgeIdx, anchorX, anchorY }, node = { nodeId, anchorX, anchorY }, fx = { x, y, sx, sy, anchorSX, anchorSY, buf, cursor, items, needsOpen? } }
+--shape: popups = { wire = { edgeIdx, anchorX, anchorY }, node = { nodeId, anchorX, anchorY }, fx = { x, y, sx, sy, anchorSX, anchorSY, buf, cursor, source=fxPickerSource, list=pickerItem[], replace?=string, refocus?=true, needsOpen? } }
 local popups = {}
 
 -- Canvas centre/half-extents, captured at the top of renderCanvas so openFxPicker
@@ -2727,18 +2727,23 @@ local function spawnPos()
          util.clamp(msy - o.oy, -o.hh + padY, o.hh - padY)
 end
 
+-- The picker's leading rows at the root; commitFx tells them from plugins by `bus`.
+local BUS_ROWS = {
+  { name = 'Buss (vertical)',   bus = true, orient = 'V' },
+  { name = 'Buss (horizontal)', bus = true, orient = 'H' },
+}
+
 -- Both routes in (RMB, N key) read the cursor: the node lands under it and the
 -- popup anchors where the node lands, so the two agree even off-canvas.
 openFxPicker = function()
   local x, y = spawnPos()
   local sx, sy = sourcePosFor(x, y)
-  local items = { { name = 'Buss (vertical)',   bus = true, orient = 'V' },
-                  { name = 'Buss (horizontal)', bus = true, orient = 'H' } }
-  for _, fx in ipairs(wv:listInstalledFX()) do util.add(items, fx) end
+  local source = wv:fxPickerSource()
   popups.fx = {
     x = x, y = y, sx = sx, sy = sy,
     anchorSX = x + canvasOrigin.ox, anchorSY = y + canvasOrigin.oy,
-    buf = '', cursor = 1, items = items, needsOpen = true,
+    buf = '', cursor = 1, source = source, list = wv:fxPickerList(source, '', BUS_ROWS),
+    needsOpen = true,
   }
 end
 
@@ -2765,49 +2770,82 @@ local function commitFx(pck, fx)
   end)
 end
 
+-- Descending sets the whole text to the place's path; the next frame's field takes it.
+-- Enter and a click have taken the field's focus, so they ask for it back.
+local function descend(pck, item, refocus)
+  pck.replace = item.place .. '/'
+  pck.refocus = refocus or nil
+end
+
 renderFxPicker = function(pck)
-  if ImGui.IsWindowAppearing(ctx) then ImGui.SetKeyboardFocusHere(ctx) end
+  -- The popup owns the queue, so its keys claim under that name. See docs/keyQueue.md § Ownership.
+  local mods = keyQueue:frameMods()
+  local take = function(key) return keyQueue:take(key, mods, 'picker') end
+  if ImGui.IsWindowAppearing(ctx) or pck.refocus then
+    ImGui.SetKeyboardFocusHere(ctx)
+    pck.refocus = nil
+  end
+  -- Backspace on a trailing `/` deletes the whole segment. The callback runs after the field's
+  -- own edit, so the parent lands this frame.
+  if pck.buf:sub(-1) == '/' and take(ImGui.Key_Backspace) then
+    pck.replace = pck.buf:match('^(.*/)[^/]*/$') or ''
+  end
   ImGui.SetNextItemWidth(ctx, 280)
   local prev = pck.buf
-  local _, buf = ImGui.InputText(ctx, '##fxFilter', prev)
+  local _, buf
+  -- The replacement stays armed until the field is active, so the callback's rewrite
+  -- clears the refocus's select-all. see docs/chrome.md § Replacing a field's text
+  if pck.replace then
+    local flags, callback = chrome.replaceWith(pck.replace)
+    _, buf = ImGui.InputText(ctx, '##fxFilter', pck.replace, flags, callback)
+    if ImGui.IsItemActive(ctx) then pck.replace = nil end
+  else
+    _, buf = ImGui.InputText(ctx, '##fxFilter', prev)
+  end
   pck.buf = buf
-  -- The popup owns the queue, so its keys claim under that name. See docs/keyQueue.md § Ownership.
-  local mods    = keyQueue:frameMods()
-  local take    = function(key) return keyQueue:take(key, mods, 'picker') end
   local entered = take(ImGui.Key_Enter) or take(ImGui.Key_KeypadEnter)
+  local tabbed  = take(ImGui.Key_Tab)
   ImGui.Separator(ctx)
 
-  local lf = buf:lower()
-  local matches = {}
-  for _, fx in ipairs(pck.items) do
-    if buf == '' or fx.name:lower():find(lf, 1, true) then
-      util.add(matches, fx)
-    end
+  local cursor = pck.cursor
+  if buf ~= prev then
+    pck.list = wv:fxPickerList(pck.source, buf, BUS_ROWS)
+    cursor = 1
   end
-  if ImGui.IsWindowAppearing(ctx) or buf ~= prev then pck.cursor = 1 end
-  local n = #matches
-  local cursor = pck.cursor or 1
+  local list, n = pck.list, #pck.list
+  -- Either mask, so the Ctrl key gives Emacs's C-n / C-p everywhere: on macOS it is Mod_Super.
+  local ctrl = function(key)
+    return keyQueue:take(key, ImGui.Mod_Ctrl, 'picker') or keyQueue:take(key, ImGui.Mod_Super, 'picker')
+  end
   if n > 0 then
-    if     take(ImGui.Key_DownArrow) then cursor = cursor % n + 1
-    elseif take(ImGui.Key_UpArrow)   then cursor = (cursor - 2) % n + 1
+    if     take(ImGui.Key_DownArrow) or ctrl(ImGui.Key_N) then cursor = cursor % n + 1
+    elseif take(ImGui.Key_UpArrow)   or ctrl(ImGui.Key_P) then cursor = (cursor - 2) % n + 1
     end
   end
   cursor = math.min(math.max(cursor, 1), math.max(n, 1))
+  local moved = cursor ~= pck.cursor or buf ~= prev
   pck.cursor = cursor
 
+  -- The list draws on every frame, a descent's included; without it the popup shrinks for a frame.
+  local clicked
+  if ImGui.BeginChild(ctx, '##fxList', 280, 240,
+                      ImGui.ChildFlags_None, ImGui.WindowFlags_NoNav) then
+    for i, row in ipairs(list) do
+      local label = row.place and row.name .. '/' or row.name
+      if ImGui.Selectable(ctx, label .. '##' .. i, i == cursor) then clicked = row end
+      if i == cursor and moved then ImGui.SetScrollHereY(ctx, 0.5) end
+    end
+  end
+  ImGui.EndChild(ctx)
+
+  local item = list[cursor]
   if take(ImGui.Key_Escape) then
     ImGui.CloseCurrentPopup(ctx)
     popups.fx = nil
-  elseif entered and matches[cursor] then
-    commitFx(pck, matches[cursor])
-  else
-    if ImGui.BeginChild(ctx, '##fxList', 280, 240,
-                        ImGui.ChildFlags_None, ImGui.WindowFlags_NoNav) then
-      for i, fx in ipairs(matches) do
-        if ImGui.Selectable(ctx, fx.name, i == cursor) then commitFx(pck, fx) end
-      end
-    end
-    ImGui.EndChild(ctx)
+  elseif (entered or tabbed) and item and item.place then descend(pck, item, entered)
+  elseif entered and item                            then commitFx(pck, item)
+  elseif clicked and clicked.place                   then descend(pck, clicked, true)
+  elseif clicked                                     then commitFx(pck, clicked)
   end
 end
 

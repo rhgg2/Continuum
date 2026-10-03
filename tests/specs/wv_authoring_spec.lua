@@ -195,18 +195,25 @@ return {
     end,
   },
   {
-    name = 'listInstalledFX is a passthrough to wm',
+    -- The list reads the source's catalogue (the place) and inProject (ReaEQ, in the
+    -- graph, ranks ahead of ReaComp despite the alphabet), leading at the root only.
+    name = 'fxPickerList lists over the fxPickerSource the picker gathered',
     run = function(harness)
-      local _, wv = mkWv(harness)
-      reaper.EnumInstalledFX = function(i)
-        if i == 0 then return true, 'VST3: ReaEQ (Cockos)',   '/Library/Audio/Plug-Ins/VST3/ReaEQ.vst3'   end
-        if i == 1 then return true, 'VST3: ReaComp (Cockos)', '/Library/Audio/Plug-Ins/VST3/ReaComp.vst3' end
-        return false
-      end
-      local list = wv:listInstalledFX()
-      t.eq(#list, 2)
-      t.eq(list[1].name,  'VST3: ReaEQ (Cockos)',   'raw name passes through')
-      t.eq(list[2].ident, '/Library/Audio/Plug-Ins/VST3/ReaComp.vst3', 'ident untouched')
+      local h, wv = mkWv(harness)
+      local EQ   = { name = 'VST3: ReaEQ (Cockos)',   ident = '/Library/Audio/Plug-Ins/VST3/ReaEQ.vst3'   }
+      local COMP = { name = 'VST3: ReaComp (Cockos)', ident = '/Library/Audio/Plug-Ins/VST3/ReaComp.vst3' }
+      h.reaper:setInstalledFx({ COMP, EQ })
+      h.reaper:setFxIO(EQ.ident, { ins = 2, outs = 2 })
+      h.ds:assign('fxCatalogue', { n = 0, entries = { ['ReaEQ.vst3'] = { paths = { EQ = true } } } })
+      t.truthy(wv:addFx(0, 0, EQ), 'precondition: ReaEQ is in the graph')
+      local leading = { { name = 'Buss (vertical)', bus = true } }
+      local source  = wv:fxPickerSource()
+      local names = {}
+      for _, item in ipairs(wv:fxPickerList(source, '', leading)) do util.add(names, item.name) end
+      t.deepEq(names, { 'EQ', 'Buss (vertical)', EQ.name, COMP.name })
+      local under = wv:fxPickerList(source, 'EQ/', leading)
+      t.eq(#under, 1)
+      t.eq(under[1].name, EQ.name, 'only the plugin below the place')
     end,
   },
   {

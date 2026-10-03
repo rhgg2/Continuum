@@ -269,7 +269,7 @@ local specs = {
   'dag_folder_capacity_spec',
   'dag_classify_spec',
   'wm_persistence_spec',
-  'wm_installed_fx_spec',
+  'wm_fx_picker_source_spec',
   'wm_probe_fx_io_spec',
   'wm_jsfx_bus_aware_spec',
   'wm_diff_midi_bus_spec',

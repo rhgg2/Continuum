@@ -82,17 +82,19 @@ thereafter authored in the FX tab, and the picker browses it.**
 1. With no text, the root thus lists the top-level places and then
    every plugin, ranked.
 
-1. Up and Down move the cursor through the whole list. The cursor
-   returns to the first row when the text changes.
+1. Up and Down, or Ctrl-N and Ctrl-P, move the cursor through the
+   whole list. The cursor returns to the first row when the text
+   changes.
 
-1. Tab or Enter on a place replaces the stem with the place's name and
-   a `/`, so the place becomes the current place. Tab acts only on a
-   place.
+1. Tab or Enter on a place replaces the text with the place's path and
+   a `/`, so the place becomes the current place, spelled as the
+   category list holds it. Tab acts only on a place.
 
 1. Enter on a plugin picks it.
 
-1. The list depends on the text alone. Deleting back past a `/` thus
-   widens the list to the parent place.
+1. The list depends on the text alone. Backspace on a trailing `/`
+   deletes the whole last segment, and thus widens the list to the
+   parent place.
 
 1. In **new**, the two busses lead the plugins at the root, and the
    stem narrows them by name as it does a plugin.

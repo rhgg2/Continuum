@@ -775,6 +775,24 @@ function chrome.selectTo(n)
   return ImGui.InputTextFlags_CallbackAlways, selectCb
 end
 
+-- One EEL instance for every caller, as selectCb. Only an active field runs it, so a caller
+-- passes text as the value too. see docs/chrome.md § Replacing a field's text
+local replaceCb = nil
+
+--post: (flags, callback) for one InputText, replacing its buffer with text, caret at the end
+function chrome.replaceWith(text)
+  if not replaceCb then
+    replaceCb = ImGui.CreateFunctionFromEEL(
+      'pending ? ( InputTextCallback_DeleteChars(0, strlen(#Buf)); '
+      .. 'InputTextCallback_InsertChars(0, #text); InputTextCallback_ClearSelection(); '
+      .. 'pending = 0; );')
+    ImGui.Attach(ctx, replaceCb)
+  end
+  ImGui.Function_SetValue_String(replaceCb, '#text', text)
+  ImGui.Function_SetValue(replaceCb, 'pending', 1)
+  return ImGui.InputTextFlags_CallbackAlways, replaceCb
+end
+
 ----- Picker (typeahead popup, shared across pages)
 
 -- Per-kind state; popups close on focus loss so a missing entry just
@@ -1069,12 +1087,16 @@ function chrome.drawPicker(d)
   local cursor = pickerCursor[d.kind] or 1
   local n = #rows
   local mods = keyQueue:frameMods()
+  -- Either mask, so the Ctrl key gives Emacs's C-n / C-p everywhere: on macOS it is Mod_Super.
+  local ctrl = function(key)
+    return keyQueue:take(key, ImGui.Mod_Ctrl, 'picker') or keyQueue:take(key, ImGui.Mod_Super, 'picker')
+  end
   if n > 0 then
     if keyQueue:take(ImGui.Key_DownArrow, mods, 'picker')
-       or keyQueue:take(ImGui.Key_RightArrow, mods, 'picker') then
+       or keyQueue:take(ImGui.Key_RightArrow, mods, 'picker') or ctrl(ImGui.Key_N) then
       cursor = cursor % n + 1
     elseif keyQueue:take(ImGui.Key_UpArrow, mods, 'picker')
-        or keyQueue:take(ImGui.Key_LeftArrow, mods, 'picker') then
+        or keyQueue:take(ImGui.Key_LeftArrow, mods, 'picker') or ctrl(ImGui.Key_P) then
       cursor = (cursor - 2) % n + 1
     end
   end

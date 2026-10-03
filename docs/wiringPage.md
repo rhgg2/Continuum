@@ -55,9 +55,39 @@ since every phase needs what the one before it left.
    through `popupShell`. The band overlay draws after all three.
 
 While the FX picker is up the page owns the key queue as `picker`, and
-the popup's Enter, arrows and Escape claim under that name
+the popup's Enter, Tab, arrows and Escape claim under that name
 (`docs/keyQueue.md` § Ownership). The page's other readers, claiming
 under no name, are locked out for those frames.
+
+## The fx picker
+
+1. The add-FX picker opens at the cursor, from a right-click on empty
+   canvas or `N`, with its field empty and focused. Its text is a path
+   being completed over the catalogue's places (`docs/fxCatalogue.md`
+   § The taxonomy): the list holds the current place's child places,
+   drawn `name/`, then, at the root only, the two buss rows, then the
+   plugins below the place.
+
+1. Tab or Enter on a place descends into it: the text becomes the
+   place's path and a `/`, and the field keeps focus. A click on a place
+   does the same. Tab on any other row does nothing.
+
+1. Backspace on a trailing `/` deletes the whole last segment, widening
+   to the parent place, since the text is the picker's whole state. A
+   text whose place resolves to nothing lists nothing.
+
+1. Enter or a click on a plugin adds it at the cursor as one undo step;
+   on a buss row, it adds a buss. Escape closes, as does a click
+   outside.
+
+1. Up and Down, or Ctrl-N and Ctrl-P (⌃ or ⌘ on macOS), move the
+   cursor, wrapping over the whole list, and the list scrolls to keep
+   it in view. The cursor returns to the first row whenever the text
+   changes, a descent included.
+
+1. The picker gathers its inputs once as it opens — the installed
+   plugins, the catalogue, and which plugins have an instance in the
+   wiring graph — and recomputes the list only when the text changes.
 
 ## The gesture state machine
 
@@ -321,8 +351,8 @@ Geometry (`ORIENT_VEC` maps `orient` V/H to the bar normal `n` and along-bar axi
 
 Creation has three entries, all landing the same `kind='bus'` node:
 
-- **Picker** — a synthetic *Buss* entry in the add-FX picker drops an unwired bar
-  at the cursor (`wv:addBusNode`).
+- **Picker** — two buss rows, vertical and horizontal, lead the root's plugins in
+  the add-FX picker; either drops an unwired bar at the cursor (`wv:addBusNode`).
 - **Node menu, per port** — for each audio port carrying an un-bussed wire
   (`bussablePorts`), a *Buss in/out N (horizontal|vertical)* entry arms the
   `busDraft` gesture (`{nodeId, dir, port, orient}`). The bar is then glued to the cursor and
@@ -374,5 +404,6 @@ page. This is that walk — every gesture the canvas supports.
   empty canvas clears it; double-click dives to the sampler or floats
   the FX window.
 - **Menus and keys** — RMB the triangle (primary toggle), a node (delete
-  and buss items) and empty canvas (FX picker); the N-key picker; Esc at
+  and buss items) and empty canvas (FX picker); the N-key picker and its
+  descent into places by Tab, Enter and click; Esc at
   every gesture point.

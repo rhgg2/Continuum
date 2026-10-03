@@ -197,9 +197,32 @@ The -/+ symbols are drawn as crisp axis-aligned filled rects on the window draw 
    Overriding the caret on a click would fight the click, since someone
    clicking at the end of a name means to type there.
 
+## Replacing a field's text
+
+1. `replaceWith(text)` returns the `(flags, callback)` pair for one
+   `InputText`, replacing its buffer with `text` and leaving the caret
+   at the end. Like `selectTo` it is one EEL instance; the text and a
+   pending flag are set immediately before the consuming call, and the
+   callback clears the flag once it has run.
+
+1. An active field ignores the value passed in, and only an active
+   field runs its callback; an inactive one takes the value. The caller
+   therefore passes `text` both ways, and the replacement lands
+   whichever state the field is in.
+
+1. Enter deactivates a single-line field, as does a click elsewhere. A
+   caller keeping the field after either requests focus back with
+   `SetKeyboardFocusHere`. The field activates a frame after the
+   request, with its whole buffer selected.
+
+1. The caller therefore arms the replacement and disarms it on
+   `IsItemActive`, as for `selectTo`. The callback then runs on the
+   activating frame, and its rewrite leaves the caret at the end with
+   nothing selected.
+
 ## Picker
 
-The generic typeahead picker (`drawPicker`) is shared across pages to avoid duplicating the popup/filter/keyboard logic. Each picker is identified by a `kind` string; filter text and cursor position are stored per kind so switching pages and back restores state. The `pickerActive` flag is frame-scoped, and the coordinator reads it at the next frame's fill: an open picker owns the keyboard, outranking even an open modal, and the picker claims Enter, Escape and the four arrows under `picker` (`docs/keyQueue.md § Ownership`). Ownership therefore trails the picker by a frame at each end, and a press landing in the frame after a picker closes is dropped.
+The generic typeahead picker (`drawPicker`) is shared across pages to avoid duplicating the popup/filter/keyboard logic. Each picker is identified by a `kind` string; filter text and cursor position are stored per kind so switching pages and back restores state. The `pickerActive` flag is frame-scoped, and the coordinator reads it at the next frame's fill: an open picker owns the keyboard, outranking even an open modal, and the picker claims Enter, Escape, the four arrows and Ctrl-N / Ctrl-P (⌃ or ⌘ on macOS) under `picker` (`docs/keyQueue.md § Ownership`). Ownership therefore trails the picker by a frame at each end, and a press landing in the frame after a picker closes is dropped.
 
 `libPicker` takes a spec table (`{ key, current, excludeOthers, off }`) and builds the item list for a library-shaped cm key (`swings`, `tempers`, `fxPatches`) in three groups, in order: Off (nil key, suppressed by `off = false` — a catalogue written *into*, like the fx tab's `save`, has nothing to turn off); project entries (`cm.project[key]`, plain label, with a trailing ` •` badge when `lib.modified` reports the entry has diverged from its library source); and other entries present in the merged view but not yet localized to project (`+` prefix). `excludeOthers` filters names out of the third group only — used to hide `id` from the swing picker, which is already covered by Off. Each row also carries where it was drawn from and how that group announces itself: `tier` is `project` on a group-2 row and `global` on a group-3 one, with `groupLabel` `Project` and `Library` to match, and neither on Off, which is no tier. A group-3 row names the library tier even where only the factory catalogue carries the name: factory is a seed source, not somewhere a name resolves from, so such a row is a seeded one whose library copy has been deleted, and calling it `global` leaves its `×` a quiet no-op where `factory` would raise in `lib.delete`.
 

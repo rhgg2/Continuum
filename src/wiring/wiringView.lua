@@ -5,7 +5,8 @@
 --invariant: wv is the logical view layer — it projects the raw graph into render-ready descriptors (label, port counts split into audio/MIDI) and carries per-session pointers (hover, selection by nodeId). Viewport geometry, screen coordinates, hit-testing, and every ImGui call live in wiringPage. wv never speaks ImGui.
 --invariant: hover / selection are nodeId-only and per-session; they don't persist. Camera (pan/zoom) lands here when 1.3b adds the drag UX.
 
-local util = require 'util'
+local util        = require 'util'
+local fxCatalogue = require 'fxCatalogue'
 
 local wm = (...).wm
 
@@ -156,7 +157,12 @@ function wv:deleteSource(nodeId, force)
   return wm:deleteSource(nodeId, force)
 end
 
-function wv:listInstalledFX() return wm:listInstalledFX() end
+function wv:fxPickerSource() return wm:fxPickerSource() end
+
+--post: fxCatalogue.pickerList over the source's catalogue, rows and inProject
+function wv:fxPickerList(source, text, leading)
+  return fxCatalogue.pickerList(source.catalogue, source.rows, source.inProject, text, leading)
+end
 
 ----- Navigation (page double-click targets)
 

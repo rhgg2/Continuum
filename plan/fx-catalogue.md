@@ -30,10 +30,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-10-03 wiring: make the fx picker path completion over the catalogue (design § The picker)
 - 2026-10-03 fxCatalogue: the picker's list as a function of its text (§ The picker 3–10, 14–15)
 - 2026-10-03 fxCatalogue: unfiled sits at the root (design § Unfiled)
 - 2026-10-02 fxCatalogue: file favourites under a path, dropping the flag (§ Favourites)
-- 2026-10-02 fxCatalogue: nest derived categories by the seed (§ The seed nesting)
 
 ## Now
 
@@ -41,13 +41,6 @@
 
 ## Queued (current phase; one-liners)
 
-- wiringRender: the fx picker as path completion (§ The picker 1–2,
-  11–14) — `renderFxPicker` draws places then plugins from the list
-  function, fed through wv/wm with the installed rows, the catalogue and
-  the project's fx keys; Tab or Enter on a place replaces the stem with
-  `name/`, Enter on a plugin picks it, Up/Down span the whole list, and
-  the cursor returns to row 1 on any text change. The **new** context
-  only, from right-click and `N` as now.
 - fxCatalogue: candidates by context (§ The filtering seam) — a
   predicate over a plugin's resolved traits and ports for **new**,
   **splice** (in and out of the wire's type), **branch** (an in of the

@@ -4,6 +4,11 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-10-03** — fx picker: Backspace on a trailing `/` deletes the whole last segment, over
+  deleting the `/` alone, since a place's path is entered by descent a segment at a time. Ctrl-N and
+  Ctrl-P move the cursor under either modifier mask, so the Ctrl key gives them on every platform;
+  the shared picker takes them too.
+
 - **2026-10-03** — JSFX have no install tree. The directory under the effects directory names a
   category for REAPER's stock set, but an author or a package for others', so it classifies nothing.
   Rejected: a `JS/<dir>` place, since REAPER's own browser lists JSFX by name with no path; and a
