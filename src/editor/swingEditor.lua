@@ -280,10 +280,10 @@ local function swingWrite(composite)
   tracker().setSwingComposite(state.name, composite)
 end
 
--- Editable clone with a guaranteed factors[] array, so write paths can
--- index it without re-checking. Phase is preserved as-is.
+-- Editable copy (cm's read is already fresh) with a guaranteed factors[] array,
+-- so write paths can index it without re-checking. Phase is preserved as-is.
 local function cloneForEdit()
-  local c = util.deepClone(swingRead()) or {}
+  local c = swingRead() or {}
   c.factors = c.factors or {}
   return c
 end

@@ -74,7 +74,7 @@ end
 local function selectTemper(name, tier)
   selected = name
   selTier  = tier or (name and homeTier(name)) or nil
-  snapshot = name and util.deepClone(editedTemper() or temperFor(name)) or nil
+  snapshot = name and (editedTemper() or temperFor(name)) or nil
 end
 
 ----- Authoring writes
@@ -97,12 +97,11 @@ local function temperWrite(temper, normalize)
   cm:set(selTier, 'tempers', map)
 end
 
--- Editable clone with pitches/stepNames densified to a common length ('' for
--- unnamed) so sort and table.remove stay array operations.
+-- Editable copy (cm's read is already fresh) with pitches/stepNames densified to a
+-- common length ('' for unnamed) so sort and table.remove stay array operations.
 local function cloneForEdit()
-  local t = editedTemper() or (selected and temperFor(selected))   -- merge-floor rows clone from the resolved source
+  local t = editedTemper() or (selected and temperFor(selected))   -- merge-floor rows copy from the resolved source
   if not t then return nil end
-  t = util.deepClone(t)
   t.pitches   = t.pitches or {}
   t.stepNames = t.stepNames or {}
   for i = 1, #t.pitches do t.stepNames[i] = t.stepNames[i] or '' end
