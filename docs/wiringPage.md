@@ -295,22 +295,24 @@ under *Spillover engagement and pinning*.
 The canvas is a strict z-stack, and several effects depend on the order:
 
 1. **Existing wires** (bottom), the splice highlight painted over them,
-   both overpainted at the node edge by step 6 so they read as emerging
-   from behind the body.
-2. **Popup sleeves** — the pale port-row backgrounds — so wires entering
-   an engaged node's popout are occluded.
-3. **The in-flight draft wire**, above the sleeves, where existing wires
-   (below the sleeve) are not.
-4. **Port rows** — the handle and the chips outside the body.
-5. **The branch ghost**, over the chips and the draft wire's end: it
-   stands for the node about to land.
-6. **Node bodies**, overpainting the sleeves, chips, wires and ghost of
-   any node they overlap, so a popout reads as behind its neighbours.
-7. **Wire-end highlight**, after the node pass — nodes overpaint wires, so
-   an in-pass highlight would be invisible.
-8. **Fader, error overlay, then what an engaged node draws on its own body
-   or must stay usable**: body outline, in-body keyboard, spillover list.
-9. **A palette drag's floating tag** (top), over everything.
+   both overpainted at the node edge by steps 4 and 5 so they read as
+   emerging from behind the body.
+2. **The in-flight draft wire**, like the existing wires below every
+   node.
+3. **The branch ghost**, over the draft wire's end: it stands for the
+   node about to land, so it draws below the bodies as a node would.
+4. **Node bodies** that aren't engaged.
+5. **Engaged nodes**, each whole and in turn: its popup sleeve (the pale
+   port-row background), the draft wire drawn again clipped to the
+   sleeve, its body overpainting the sleeve's overlap with it, then its
+   handle and chips. An engaged node and its popout so read over any
+   neighbour; the sleeve occludes the existing wires entering the popout,
+   while the draft reads over it.
+6. **Wire-end highlight**, after the node passes — nodes overpaint wires,
+   so an in-pass highlight would be invisible.
+7. **Fader, error overlay, then each engaged node's body outline and
+   spillover list.**
+8. **A palette drag's floating tag** (top), over everything.
 
 `drawCanvas` runs the whole stack in this order, as one phase of the
 canvas frame. The band overlay is the exception: it draws over the

@@ -703,29 +703,27 @@ local function drawPortRowBg(p, layout)
   p.fill(popup, 'wiring.tooltip.bg', UI.NODE.ROUND)
 end
 
--- Draws one side of the row, outlining the slot matching pick.slot: handle and chips outside
--- the body (under the node pass), or the in-body slots (over it). Chips stay visible with the list open.
-local function drawPortRow(p, pick, idPrefix, inBody)
+-- Draws the handle and every slot, outlining the one matching pick.slot. Chips
+-- stay visible with the list open (it extends perpendicular) so the port→row map holds.
+local function drawPortRow(p, pick, idPrefix)
   local layout, highlight = pick.layout, pick.slot
-  if layout.handle and not inBody then drawHandle(p, layout.handle, layout.side) end
+  if layout.handle then drawHandle(p, layout.handle, layout.side) end
   local bodyName = 'wiring.node.' .. pick.nv.category
   for i, s in ipairs(layout.slots) do
-    if (s.inBody or false) == inBody then
-      if s.inBody then
-        -- Body-internal kbd: fill body colour to overpaint the label, then the
-        -- icon. No InvisibleButton (the body owns the drag area) or tooltip.
-        p.fill(boxRect(s), bodyName)
-        drawKeyboardIcon(p, s.x, s.y)
-      else
-        drawSlot(p, s, idPrefix .. '/' .. i)
-      end
-      -- Match by (kind, portIdx), not identity: defaultSlot returns a synthetic
-      -- spec, so identity would miss the midi kbd on a body-hover midi draft.
-      if highlight and s.kind == highlight.kind
-         and (s.kind ~= 'audio' or s.portIdx == highlight.portIdx) then
-        p.stroke(rect(s.x, s.y, s.x + s.w, s.y + s.h),
-                 'wiring.node.selected', UI.NODE.SELECTED_STROKE, 0)
-      end
+    if s.inBody then
+      -- Body-internal kbd: fill body colour to overpaint the label, then the
+      -- icon. No InvisibleButton (the body owns the drag area) or tooltip.
+      p.fill(boxRect(s), bodyName)
+      drawKeyboardIcon(p, s.x, s.y)
+    else
+      drawSlot(p, s, idPrefix .. '/' .. i)
+    end
+    -- Match by (kind, portIdx), not identity: defaultSlot returns a synthetic
+    -- spec, so identity would miss the midi kbd on a body-hover midi draft.
+    if highlight and s.kind == highlight.kind
+       and (s.kind ~= 'audio' or s.portIdx == highlight.portIdx) then
+      p.stroke(rect(s.x, s.y, s.x + s.w, s.y + s.h),
+               'wiring.node.selected', UI.NODE.SELECTED_STROKE, 0)
     end
   end
 end
@@ -2093,8 +2091,8 @@ end
 local function drawCanvas(frame)
   local p, draft = frame.p, frame.draft
 
-  -- z-stack (docs/wiringPage.md): wires < source tags < sleeves < draft < chips < ghost
-  -- < nodes < on-body overlays and lists < palette tag.
+  -- z-stack (docs/wiringPage.md): wires < source tags < draft < ghost < nodes < engaged nodes
+  -- < body outlines and lists < palette tag.
   local placedLabels = {}
   drawWiresPass(p, frame.segs, frame.wireViewsList,
     { skipEdgeIdx = draft and draft.edgeIdx }, placedLabels)
@@ -2123,19 +2121,30 @@ local function drawCanvas(frame)
   local shown = draft and { draft = draft, x = frame.draftCx, y = frame.draftCy,
                             branches = frame.draftBranches }
                 or held and { draft = held.draft, x = held.x, y = held.y, branches = true }
-  for _, pick in ipairs(frame.overlays) do drawPortRowBg(p, pick.layout) end
   if shown then drawDraftWire(p, frame.nodesById, shown) end
-  -- Chips under the node pass, so a neighbour's body occludes them. idPrefix is nv.id-keyed
-  -- so InvisibleButtons stay unique across simultaneous overlays.
-  for _, pick in ipairs(frame.overlays) do
-    drawPortRow(p, pick, '##portSlot/' .. pick.nv.id, false)
-  end
   if shown then drawGhost(p, shown) end
-  for _, nv in ipairs(frame.nodeViews) do
+  local function drawBody(nv)
     if not (nv.category == 'bus' and frame.matrixRails[nv.id]) then
       drawNode(p, nv, frame.selection[nv.id])
       if nodeHasFx(nv) then drawNodeBadges(p, nv, wv:muted(nv.id), wv:bypassed(nv.id)) end
     end
+  end
+  local engaged = {}
+  for _, pick in ipairs(frame.overlays) do engaged[pick.nv.id] = true end
+  for _, nv in ipairs(frame.nodeViews) do
+    if not engaged[nv.id] then drawBody(nv) end
+  end
+  -- An engaged node rises whole over its neighbours: sleeve, the draft again within it, then the
+  -- body overpainting the sleeve's overlap, then the port row. idPrefix keeps InvisibleButtons unique.
+  for _, pick in ipairs(frame.overlays) do
+    drawPortRowBg(p, pick.layout)
+    if shown and pick.layout.popup then
+      p.pushClip(pick.layout.popup)
+      drawDraftWire(p, frame.nodesById, shown)
+      p.popClip()
+    end
+    drawBody(pick.nv)
+    drawPortRow(p, pick, '##portSlot/' .. pick.nv.id)
   end
 
   -- After the node pass: nodes overpaint wires, so an in-pass highlight (and
@@ -2152,14 +2161,13 @@ local function drawCanvas(frame)
 
   if fader then drawFader(p, fader) end
 
-  -- Overlay pass per engaged node: what sits on its body, and the list, which must stay usable.
+  -- Per engaged node, over the fader and highlights: its body outline, and its list.
   for _, pick in ipairs(frame.overlays) do
     -- Body outline only for a body-default audio slot (no chip to carry the
     -- mark). Chevron hits and midi (the kbd self-highlights) leave it unmarked.
     if pick.slot and not pick.slot.x and pick.slot.kind ~= 'midi' then
       drawBodyOutline(p, pick.nv)
     end
-    drawPortRow(p, pick, '##portSlot/' .. pick.nv.id, true)
     if pick.list then drawList(p, pick.list, pick.slot) end
   end
 
