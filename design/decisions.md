@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-10-03** — The FX tab's plugin list selects as a file browser does: Ctrl-click toggles a
+  row, Shift-click takes the range from the anchor, and Ctrl-Shift-click adds that range, over
+  arrange's Shift-click toggle, since a list has a linear range to take. A selection holds only
+  listed rows, so an edit never reaches a hidden one. The probe covers every unprobed plugin, over
+  the selected rows or a place, one per frame on scratch, and writes a probe failure before each
+  instantiation, so a plugin that crashes or hangs REAPER is skipped after.
+
 - **2026-10-03** — An engaged node draws whole (sleeve, body, port row) over every other node, over
   drawing its popout below the bodies, where a neighbour hid the chip being aimed at. The draft wire
   draws below every body and the ghost, and again clipped to each sleeve so it reads over the

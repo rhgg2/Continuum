@@ -30,10 +30,36 @@ thereafter authored in the FX tab, and the picker browses it.**
 
 ## Probing
 
-1. A **probe** instantiates a chosen set of plugins to write their
-   ports without waiting for use.
+1. A **probe** instantiates every installed plugin that is unprobed, to
+   write its audio ports without waiting for use. It is run when the
+   user asks.
 
 1. A plugin whose entry holds no audio ports is **unprobed**.
+
+1. A probe writes audio ports alone. It is not a use, so it leaves
+   every usage score as it stands.
+
+1. A probe takes one plugin per frame. It shows how many plugins it has
+   probed of how many, and which one it is probing, and it can be
+   stopped.
+
+1. Each instance is added on the scratch track (`docs/scratch.md`),
+   read, and removed within one frame. The project is thus left as it
+   stood, and no undo point is made.
+
+1. Before instantiating a plugin, the probe writes a **probe failure**
+   to its entry, and it clears the failure once the plugin's ports are
+   written.
+
+1. The global file is written on every write (`docs/pextStore.md`). A
+   plugin that fails to instantiate, crashes REAPER, or hangs until
+   REAPER is killed thus keeps its probe failure.
+
+1. A probe skips a plugin carrying a probe failure. A use clears the
+   failure, since it writes the plugin's ports.
+
+1. A plugin carrying a probe failure holds no ports. It is thus
+   unprobed, and passes every audio test (§ The filtering seam).
 
 ## Favourites
 
@@ -194,19 +220,19 @@ thereafter authored in the FX tab, and the picker browses it.**
    list nested by path beneath it.
 
 1. The content pane holds the **plugin list** for the place selected in
-   the tree, over a **detail strip** for the plugin selected in the
-   list.
+   the tree, over a **detail strip** for the list's cursor row
+   (§ Selecting in the list).
 
 1. The detail strip shows the plugin's key, its category paths, its
-   traits, its audio ports or that it is unprobed, its usage score and
-   its developer name.
+   traits, its audio ports or that it is unprobed, any probe failure, its
+   usage score and its developer name.
 
 1. The tab opens from the editor page's pane selector, or from **Show
    in catalogue** in an fx node's menu (`docs/wiringPage.md`).
 
-1. Show in catalogue selects the root and the node's plugin. Escape
-   then returns to the wiring page (`docs/editorPage.md` § Entry and
-   exit).
+1. Show in catalogue clears the filter, selects the root, and puts the
+   cursor on the node's plugin. Escape then returns to the wiring page
+   (`docs/editorPage.md` § Entry and exit).
 
 ## The plugin list
 
@@ -227,13 +253,50 @@ thereafter authored in the FX tab, and the picker browses it.**
 1. A filter narrows the list to the plugins whose names contain its
    text, ignoring case.
 
-1. Several rows may be selected at once. Filing and unfiling act on
-   every selected row.
+1. The filter sits in the toolbar, among the tab's own tools
+   (`docs/editorPage.md` § The toolbar).
+
+## Selecting in the list
+
+1. The plugin list carries a **cursor row** and a **selection**, a set
+   of its rows. The detail strip shows the cursor row, and filing and
+   unfiling act on the selection.
+
+1. A click puts the cursor on a row and selects that row alone.
+
+1. Ctrl-click puts the cursor on a row and adds the row to the
+   selection, or removes it where it is already selected.
+
+1. The **anchor** is the row of the last click or Ctrl-click.
+
+1. Shift-click selects the rows from the anchor to the clicked row, in
+   place of the selection. Ctrl-Shift-click adds those rows to the
+   selection.
+
+1. Up and Down, or Ctrl-N and Ctrl-P, move the cursor and select its
+   row alone, as a click does. With Shift, they select from the anchor
+   to the cursor, as Shift-click does.
+
+1. The keys move the cursor while the filter is being typed in, as they
+   do in the picker.
+
+1. Ctrl-A outside the filter selects every listed row. A filter and
+   Ctrl-A thus select every plugin below the place whose name matches.
+
+1. A row leaving the list leaves the selection, so filing and unfiling
+   act only on listed rows. A cursor row leaving the list returns the
+   cursor to the first row.
+
+1. The place tree is driven by the mouse, and selects one place at a
+   time.
 
 ## Editing in the tab
 
-1. Dropping the selected rows on a path in the place tree files them
-   under it.
+1. Dragging a selected row carries the selection. Dragging any other
+   row selects it alone, and carries it.
+
+1. Dropping the carried rows on a path in the place tree files them
+   under it. The root takes no rows, since it is no path.
 
 1. **File under…** files the selected rows under a path picked from the
    category list. Where its text names a path the list does not hold,
@@ -242,23 +305,32 @@ thereafter authored in the FX tab, and the picker browses it.**
 
 1. Filing adds a path to a plugin and leaves its others in place.
 
-1. **Unfile** removes the selected path from each selected row filed
-   under it. A row below the path only through a path beneath it keeps
-   its paths.
+1. **Unfile** removes the selected place from each selected row filed
+   under it. A row below the place only through a path beneath it
+   keeps its paths. At the root, which is no path, Unfile is
+   unavailable.
 
 1. The detail strip carries a control on each of the plugin's paths
    that unfiles the plugin from it.
 
-1. The place tree carries **new**, **rename** and **import**.
+1. The place tree carries **new**, **rename**, **import** and
+   **probe**.
 
 1. New makes a standing path under the selected place, its last name
-   typed.
+   typed. At the root, it makes a top-level path.
 
 1. Rename edits the selected path whole. A path thus moves by retyping
-   its parent (`docs/fxCatalogue.md` § The taxonomy).
+   its parent (`docs/fxCatalogue.md` § The taxonomy). At the root,
+   Rename is unavailable.
+
+1. Dragging a path in the place tree onto another moves it beneath
+   that path, and onto the root moves it to the top level. A move is
+   the rename that retypes the parent.
 
 1. Import shows each source with its counts, takes or declines each,
    and sets the mode (`docs/fxCatalogue.md` § Import).
+
+1. Probe runs a probe (§ Probing), whichever place is selected.
 
 1. Each trait in the detail strip is authored present, authored absent
    or left to resolve (`docs/fxCatalogue.md` § Traits). A trait left
@@ -267,8 +339,8 @@ thereafter authored in the FX tab, and the picker browses it.**
 1. Edits in the tab sit outside undo, with the rest of the catalogue
    (`docs/fxCatalogue.md` § The catalogue).
 
-1. Two edits confirm before they write: a rename onto a path the list
-   holds, which merges the two, and import in replace mode.
+1. Two edits confirm before they write: a rename or move onto a path
+   the list holds, which merges the two, and import in replace mode.
 
 ## Open
 
@@ -302,9 +374,6 @@ thereafter authored in the FX tab, and the picker browses it.**
 
 1. Whether the place tree can delete a path, and what becomes of the
    plugins filed under it.
-
-1. What a probe costs over a large installation, and whether the tab
-   probes the selected rows or every unprobed plugin below a place.
 
 1. Whether the busses become catalogue entries under keys of their
    own, filed like any plugin — under `Tools` by the seed — and listed
