@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-10-03** — The catalogue is edited in a Plugins pane, over the FX tab, a name the tracker's
+  strip already holds. Its plugin list holds the plugins at the place, as a file browser does, over
+  everything below it; only the filter searches below. A drag moves, unfiling from the selected
+  place alone, and Ctrl at the drop copies. Delete unfiles a path and its descendants, confirming
+  where anything is filed. A probe runs only while the pane is shown, over in the background, since
+  a heavy plugin stalls its frame; stopping loses nothing.
+
 - **2026-10-03** — The FX tab's plugin list selects as a file browser does: Ctrl-click toggles a
   row, Shift-click takes the range from the anchor, and Ctrl-Shift-click adds that range, over
   arrange's Shift-click toggle, since a list has a linear range to take. A selection holds only
