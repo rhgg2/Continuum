@@ -202,6 +202,12 @@ function wv:spliceIntoEdge(edgeIdx, nodeId, pos) return wm:spliceIntoEdge(edgeId
 --post: pass-through to wm:insertFx; one undo step, or the graph stands as before
 function wv:insertFx(edgeIdx, fx, pos) return wm:insertFx(edgeIdx, fx, pos) end
 
+--post: pass-through to wm:coverNeed — the need of a plugin that can take every wire on nodeId
+function wv:coverNeed(nodeId) return wm:coverNeed(nodeId) end
+
+--post: pass-through to wm:replaceFx; one undo step, or the graph stands as before
+function wv:replaceFx(nodeId, fx) return wm:replaceFx(nodeId, fx) end
+
 --contract: pass-through to wm:addBusNode; mints unwired buss at (x,y); orient defaults 'V'
 function wv:addBusNode(x, y, orient) return wm:addBusNode({ x = x, y = y }, orient) end
 

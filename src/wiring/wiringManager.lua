@@ -790,6 +790,68 @@ function wm:insertFx(edgeIdx, fx, pos)
   return id, err
 end
 
+--post: per type and side, the highest port wired on nodeId (a MIDI wire is port 1); every count set
+function wm:coverNeed(nodeId)
+  ensureLoaded()
+  local need = { audio = { ins = 0, outs = 0 }, midi = { ins = 0, outs = 0 } }
+  for _, e in ipairs(userGraph.edges) do
+    local sides = need[e.type]
+    if e.to == nodeId then sides.ins = math.max(sides.ins, e.toPort or 1) end
+    if e.from == nodeId then sides.outs = math.max(sides.outs, e.fromPort or 1) end
+  end
+  return need
+end
+
+--post: one undo step: adds fx at nodeId's pos with no auto-source, moves every wire and source tag
+--post: on nodeId onto the same port of fx, and removes nodeId; returns the new node id
+--post: nil+err on refusal, or if fx can't take the wires — then fx is removed and the graph stands
+function wm:replaceFx(nodeId, fx)
+  ensureLoaded()
+  local old = userGraph.nodes[nodeId]
+  if not (old and old.kind == 'fx') then return nil, { code = 'not_fx', id = nodeId } end
+  local pos = { x = old.pos.x, y = old.pos.y }
+  local label = 'wiring: replace ' .. (old.fxDisplay or 'fx') .. ' with '
+                .. (fx.name and shortFxName(fx.name) or fx.ident)
+  local id, err
+  rm:transaction(label, function()
+    id, err = self:addFxNode(pos.x, pos.y, fx, { autoSource = false })
+    if not id then return end
+    local added, retagged = id, {}
+    local moved, moveErr = self:mutate(function(g)
+      -- addFxNode's own master wire would duplicate a moved one
+      g.edges = util.filter(g.edges, function(e) return e.from ~= added and e.to ~= added end)
+      for _, e in ipairs(g.edges) do
+        if e.to == nodeId then
+          local producer, before = g.nodes[e.from], srcTagKey(e)
+          e.to = added
+          local tag = producer.tagPos and producer.tagPos[before]
+          if tag then
+            producer.tagPos[before], producer.tagPos[srcTagKey(e)] = nil, tag
+            retagged[e.from] = true
+          end
+        end
+        if e.from == nodeId then e.from = added end
+      end
+      g.nodes[added].tagPos = g.nodes[nodeId].tagPos
+      if g.nodes[added].tagPos then retagged[added] = true end
+      g.nodes[nodeId] = nil
+    end)
+    if moved then
+      for retaggedId in pairs(retagged) do
+        local node = userGraph.nodes[retaggedId]
+        persistNodeMeta(node, { tagPos = node.tagPos })
+      end
+      return
+    end
+    id, err = nil, moveErr
+    self:mutate(function(g)
+      g.nodes[added] = nil
+      g.edges = util.filter(g.edges, function(e) return e.from ~= added and e.to ~= added end)
+    end)
+  end)
+  return id, err
+end
+
 --shape: busRecord = { pos={x,y}, orient='V'|'H', ext={lo,hi}?, ins={{node,port,gain?},…}, outs={…}, trackId? } — ext = hand-sized bar span (axial offsets from pos); taps mirror the node's edges; trackId iff matrix
 --contract: deep copy of the 'bus' meta store: { [busId] = busRecord }
 function wm:busRecords()

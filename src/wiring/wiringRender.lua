@@ -145,7 +145,7 @@ local canvasOrigin = { ox = 0, oy = 0, hw = 0, hh = 0 }
 
 -- Forward decls: RMB dispatch, the wire menu and the N-key command fill the picker slot;
 -- renderFxPickerPopup opens and draws it, with the wiring-scope commands below.
-local openFxPicker, newFxContext, spliceFxContext, renderFxPicker
+local openFxPicker, newFxContext, spliceFxContext, replaceFxContext, renderFxPicker
 
 ----- Pixel geometry (page-owned)
 
@@ -2449,8 +2449,8 @@ local function renderWireMenu(frame)
   end)
 end
 
--- Node menu: anchored at the cursor. Deletes the node or buss, rotates a buss,
--- and arms a busDraft per bussable port.
+-- Node menu: anchored at the cursor. Deletes the node or buss, replaces an fx node,
+-- rotates a buss, and arms a busDraft per bussable port.
 local function renderNodeMenu(frame)
   local menu = popups.node
   if not menu then return end
@@ -2462,6 +2462,10 @@ local function renderNodeMenu(frame)
     if ImGui.Selectable(ctx, isBus and 'Delete buss' or 'Delete node') then
       if isBus then wv:deleteBus(menu.nodeId)
       else          wv:deleteNode(menu.nodeId) end
+      ImGui.CloseCurrentPopup(ctx)
+    end
+    if menuNode and menuNode.activate and ImGui.Selectable(ctx, 'Replace…') then
+      openFxPicker(replaceFxContext(menu.nodeId, menu.anchorX, menu.anchorY))
       ImGui.CloseCurrentPopup(ctx)
     end
     if isBus and ImGui.Selectable(ctx, 'Rotate buss') then
@@ -2781,8 +2785,16 @@ spliceFxContext = function(edgeIdx, wireType, x, y)
   return { x = x, y = y, need = { [wireType] = { ins = 1, outs = 1 } }, leading = {}, commit = commit }
 end
 
+-- The picker at a node's menu: plugins whose ports cover the node's wires, no buss rows.
+replaceFxContext = function(nodeId, x, y)
+  local function commit(row)
+    wv:replaceFx(nodeId, { name = row.name, ident = row.ident })
+  end
+  return { x = x, y = y, need = wv:coverNeed(nodeId), leading = {}, commit = commit }
+end
+
 -- Defer the gesture so the picker's close paints before the live
--- recompile/reconcile stall — the add, or the insert, keeps its single Undo block.
+-- recompile/reconcile stall — the add, insert or replace keeps its single Undo block.
 local function commitFx(pck, row)
   ImGui.CloseCurrentPopup(ctx)
   popups.fx = nil

@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-10-03** — A replace covers a node's wires with the existing need shape: per type and side,
+  the highest port wired there, since ports count stereo pairs and pair k finds pair k exactly when
+  ins ≥ k. The replace mutate strips the new plugin's own wires before moving the node's in, over an
+  addFxNode option to suppress its auto master wire, which the insert verb depends on. Source-tag
+  offsets are rekeyed onto the new consumer, over pruning them, so a replaced node's tags stay where
+  they were placed.
+
 - **2026-10-03** — A wm verb that adds and wires a plugin composes addFxNode and spliceIntoEdge
   under an outer rm:transaction, over one fused mutate: REAPER undo blocks nest, so the outermost
   label names the single step, at the cost of two live reconciles. A plugin that proves unable to

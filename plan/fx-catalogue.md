@@ -30,10 +30,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-10-03 wiring: replace an fx node from Replace… (design § Opening the picker 8–10)
 - 2026-10-03 wiring: splice an fx into a wire from Insert fx… (design § Opening the picker 1, 3, 9–10)
 - 2026-10-03 wm: splice over either wire type (§ The splice)
 - 2026-10-03 fxCatalogue: filter picker rows by need and hide empty places (§ The filtering seam)
-- 2026-10-03 wiring: make the fx picker path completion over the catalogue (design § The picker)
 
 ## Now
 
@@ -41,12 +41,6 @@
 
 ## Queued (current phase; one-liners)
 
-- wiringManager: **replace** from **Replace…** (§ Opening the picker 8–9)
-  — the node menu gains the item, opening the picker in the replace
-  context with the node's wires as the set to cover; the pick puts the
-  plugin at the node's position, moves every wire onto the matching
-  port, keeps an instrument's source wired to it, and removes the node,
-  as one undo step. Spec on the wm replace.
 - wiringRender: **branch** from a draft released on empty canvas
   (§ Opening the picker 4–7, 9) — the release opens the picker in the
   branch context of the draft port's type (MIDI for a palette row); the
