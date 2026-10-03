@@ -279,6 +279,7 @@ local specs = {
   'wm_delete_source_spec',
   'wm_bus_node_spec',
   'wm_splice_spec',
+  'wm_insert_fx_spec',
   'wm_snapshot_spec',
   'wm_target_alloc_spec',
   'wm_diff_spec',

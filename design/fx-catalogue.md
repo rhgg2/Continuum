@@ -159,6 +159,11 @@ thereafter authored in the FX tab, and the picker browses it.**
 1. In every context, adding the plugin and wiring it in are one undo
    step.
 
+1. A picked plugin whose ports prove unable to take the wiring is
+   removed in that same step, and the graph stands as it was. Its
+   instantiation has recorded its ports, so the context no longer
+   admits it.
+
 ## The splice
 
 1. A splice re-points a wire into a node's first in of the wire's

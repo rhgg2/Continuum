@@ -136,16 +136,16 @@ local paletteSource = nil  -- nodeId the palette del button acts on; cleared whe
 
 -- The canvas popups. A slot holds a popup's live state while open: RMB
 -- dispatch and openFxPicker fill it, popupShell clears it when ImGui closes it.
---shape: popups = { wire = { edgeIdx, anchorX, anchorY }, node = { nodeId, anchorX, anchorY }, fx = { x, y, sx, sy, anchorSX, anchorSY, buf, cursor, source=fxPickerSource, list=pickerItem[], replace?=string, refocus?=true, needsOpen? } }
+--shape: popups = { wire = { edgeIdx, anchorX, anchorY }, node = { nodeId, anchorX, anchorY }, fx = { anchorSX, anchorSY, buf, cursor, source=fxPickerSource, list=pickerItem[], leading=row[], commit=function(row), replace?=string, refocus?=true, needsOpen? } }
 local popups = {}
 
 -- Canvas centre/half-extents, captured at the top of renderCanvas so openFxPicker
 -- can recover mouse coords and clamp on-screen after renderCanvas exits (N-key path).
 local canvasOrigin = { ox = 0, oy = 0, hw = 0, hh = 0 }
 
--- Forward decls: RMB dispatch and the N-key command fill the picker slot;
+-- Forward decls: RMB dispatch, the wire menu and the N-key command fill the picker slot;
 -- renderFxPickerPopup opens and draws it, with the wiring-scope commands below.
-local openFxPicker, renderFxPicker
+local openFxPicker, newFxContext, spliceFxContext, renderFxPicker
 
 ----- Pixel geometry (page-owned)
 
@@ -1117,14 +1117,12 @@ end
 local function linToDb(lin) if lin <= 0 then return -math.huge end; return 20 * math.log(lin, 10) end
 local function dbToLin(db)  if db == -math.huge then return 0 end;  return 10 ^ (db / 20) end
 
-local function arrowMidHit(segs, mx, my)
+local function triangleHit(segs, mx, my)
   for i, seg in pairs(segs) do
-    if seg.w.type == 'audio' then
-      local cx, cy = seg.cx, seg.cy
-      local dx, dy = mx - cx, my - cy
-      if dx*dx + dy*dy <= UI.FADER.HIT * UI.FADER.HIT then
-        return i, cx, cy
-      end
+    local cx, cy = seg.cx, seg.cy
+    local dx, dy = mx - cx, my - cy
+    if dx*dx + dy*dy <= UI.FADER.HIT * UI.FADER.HIT then
+      return i, cx, cy
     end
   end
 end
@@ -1999,7 +1997,7 @@ local function resolveHover(frame)
   tickFaderDrag(frame)
 
   if not gesture and not frame.shiftHeld then
-    frame.arrowHitIdx = arrowMidHit(frame.segs, frame.lmx, frame.lmy)
+    frame.arrowHitIdx = triangleHit(frame.segs, frame.lmx, frame.lmy)
   end
   keepOrCloseFader(frame)
 
@@ -2138,10 +2136,10 @@ local function faderInput(frame)
   end
   local function inStrip() return inRect(lmx, lmy, fader.rect) end
 
-  -- LMB on the triangle opens at the current value, warps the OS cursor to
+  -- LMB on an audio triangle opens at the current value, warps the OS cursor to
   -- the knob, and the faderDrag gesture suppresses the in-strip jump-set below.
   local arrowLmbClicked = arrowHitIdx and not fader and not popups.wire
-    and ImGui.IsMouseClicked(ctx, 0)
+    and frame.segs[arrowHitIdx].w.type == 'audio' and ImGui.IsMouseClicked(ctx, 0)
   if arrowLmbClicked then
     local seg = frame.segs[arrowHitIdx]
     local x0, y0, x1, y1 = faderRectAt(seg.cx, seg.cy)
@@ -2381,7 +2379,7 @@ local beginGesture do
   end
 end
 
--- RMB precedence: triangle → per-wire menu; node body / buss bar → node
+-- RMB precedence: triangle (either wire type) → per-wire menu; node body / buss bar → node
 -- menu; empty canvas → FX picker (same code path as the N-key shortcut).
 local function rmbDispatch(frame)
   if gesture or not frame.overCanvas or not ImGui.IsMouseClicked(ctx, 1) then return end
@@ -2397,7 +2395,7 @@ local function rmbDispatch(frame)
       popups.node = { nodeId = menuId, anchorX = frame.lmx, anchorY = frame.lmy }
       ImGui.OpenPopup(ctx, '##wiringNodeMenu')
     else
-      openFxPicker()
+      openFxPicker(newFxContext())
     end
   end
 end
@@ -2430,7 +2428,8 @@ local function closeOnCursorLeave(mx, my)
   end
 end
 
--- Wire menu: centred on the triangle it was opened from.
+-- Wire menu: centred on the triangle it was opened from. Primary is audio-only
+-- (DAG primaryAudioParents); Insert fx… opens the picker at the triangle.
 local function renderWireMenu(frame)
   local menu = popups.wire
   if not menu then return end
@@ -2438,8 +2437,14 @@ local function renderWireMenu(frame)
   ImGui.SetNextWindowPos(ctx, screenX, screenY, ImGui.Cond_Appearing, 0.5, 0.5)
   popupShell('wire', '##wiringWireMenu', nil, function()
     local wire = frame.wireViewsList[menu.edgeIdx]
-    local changed, v = chrome.checkbox('Primary', wire and wire.primary or false)
-    if changed then wv:setEdgePrimary(menu.edgeIdx, v) end
+    if wire and wire.type == 'audio' then
+      local changed, v = chrome.checkbox('Primary', wire.primary or false)
+      if changed then wv:setEdgePrimary(menu.edgeIdx, v) end
+    end
+    if wire and ImGui.Selectable(ctx, 'Insert fx…') then
+      openFxPicker(spliceFxContext(menu.edgeIdx, wire.type, menu.anchorX, menu.anchorY))
+      ImGui.CloseCurrentPopup(ctx)
+    end
     closeOnCursorLeave(frame.mx, frame.my)
   end)
 end
@@ -2727,7 +2732,7 @@ local function spawnPos()
          util.clamp(msy - o.oy, -o.hh + padY, o.hh - padY)
 end
 
--- The picker's leading rows at the root; commitFx tells them from plugins by `bus`.
+-- The new context's leading rows at the root; its commit tells them from plugins by `bus`.
 local BUS_ROWS = {
   { name = 'Buss (vertical)',   bus = true, orient = 'V' },
   { name = 'Buss (horizontal)', bus = true, orient = 'H' },
@@ -2736,41 +2741,52 @@ local BUS_ROWS = {
 -- The need of a plugin that stands alone: every installed plugin is a candidate.
 local NEW_NEED = {}
 
--- Both routes in (RMB, N key) read the cursor: the node lands under it and the
--- popup anchors where the node lands, so the two agree even off-canvas.
-openFxPicker = function()
-  local x, y = spawnPos()
-  local sx, sy = sourcePosFor(x, y)
-  local source = wv:fxPickerSource(NEW_NEED)
+--shape: pickerContext = { x, y, need=need, leading=row[], commit=function(row) }  -- x,y canvas coords; the popup anchors there
+--post: popups.fx holds the picker over context's candidates and leading rows, opening next frame
+openFxPicker = function(context)
+  local source = wv:fxPickerSource(context.need)
   popups.fx = {
-    x = x, y = y, sx = sx, sy = sy,
-    anchorSX = x + canvasOrigin.ox, anchorSY = y + canvasOrigin.oy,
-    buf = '', cursor = 1, source = source, list = wv:fxPickerList(source, '', BUS_ROWS),
-    needsOpen = true,
+    anchorSX = context.x + canvasOrigin.ox, anchorSY = context.y + canvasOrigin.oy,
+    buf = '', cursor = 1, source = source, list = wv:fxPickerList(source, '', context.leading),
+    leading = context.leading, commit = context.commit, needsOpen = true,
   }
 end
 
--- Defer the gesture so the picker's close paints before the live
--- recompile/reconcile stall — wm:addFxNode keeps its single Undo block.
-local function commitFx(pck, fx)
-  ImGui.CloseCurrentPopup(ctx)
-  popups.fx = nil
-  reaper.defer(function()
-    if fx.bus then
-      wv:addBusNode(pck.x, pck.y, fx.orient)
-    else
-      local _, sourceGuid = wv:addFx(pck.x, pck.y, { name = fx.name, ident = fx.ident },
-                                     { sourcePos = { x = pck.sx, y = pck.sy } })
-      if sourceGuid then
-        local slot = facade.get('tracker').selectNewTake(sourceGuid)
-        local arrange = facade.get('arrange')
-        if slot and not arrange.hasPlacedTakes() then
-          local trackIdx = arrange.trackIdxForGuid(sourceGuid)
-          if trackIdx then arrange.dropSlot(trackIdx, slot, 0) end
-        end
+-- Both routes in (RMB, N key) read the cursor: the node lands under it and the
+-- popup anchors where the node lands, so the two agree even off-canvas.
+newFxContext = function()
+  local x, y = spawnPos()
+  local sx, sy = sourcePosFor(x, y)
+  local function commit(row)
+    if row.bus then return wv:addBusNode(x, y, row.orient) end
+    local _, sourceGuid = wv:addFx(x, y, { name = row.name, ident = row.ident },
+                                   { sourcePos = { x = sx, y = sy } })
+    if sourceGuid then
+      local slot = facade.get('tracker').selectNewTake(sourceGuid)
+      local arrange = facade.get('arrange')
+      if slot and not arrange.hasPlacedTakes() then
+        local trackIdx = arrange.trackIdxForGuid(sourceGuid)
+        if trackIdx then arrange.dropSlot(trackIdx, slot, 0) end
       end
     end
-  end)
+  end
+  return { x = x, y = y, need = NEW_NEED, leading = BUS_ROWS, commit = commit }
+end
+
+-- The picker at a wire's triangle: plugins with an in and an out of its type, no buss rows.
+spliceFxContext = function(edgeIdx, wireType, x, y)
+  local function commit(row)
+    wv:insertFx(edgeIdx, { name = row.name, ident = row.ident }, { x = x, y = y })
+  end
+  return { x = x, y = y, need = { [wireType] = { ins = 1, outs = 1 } }, leading = {}, commit = commit }
+end
+
+-- Defer the gesture so the picker's close paints before the live
+-- recompile/reconcile stall — the add, or the insert, keeps its single Undo block.
+local function commitFx(pck, row)
+  ImGui.CloseCurrentPopup(ctx)
+  popups.fx = nil
+  reaper.defer(function() pck.commit(row) end)
 end
 
 -- Descending sets the whole text to the place's path; the next frame's field takes it.
@@ -2812,7 +2828,7 @@ renderFxPicker = function(pck)
 
   local cursor = pck.cursor
   if buf ~= prev then
-    pck.list = wv:fxPickerList(pck.source, buf, BUS_ROWS)
+    pck.list = wv:fxPickerList(pck.source, buf, pck.leading)
     cursor = 1
   end
   local list, n = pck.list, #pck.list
@@ -2854,7 +2870,7 @@ end
 
 local wiring = cmgr:scope('wiring')
 wiring:registerAll{
-  wiringAddFx          = openFxPicker,
+  wiringAddFx          = function() openFxPicker(newFxContext()) end,
   wiringClearSelection = function() wv:setSelection{} end,
 }
 

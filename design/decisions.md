@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-10-03** — A wm verb that adds and wires a plugin composes addFxNode and spliceIntoEdge
+  under an outer rm:transaction, over one fused mutate: REAPER undo blocks nest, so the outermost
+  label names the single step, at the cost of two live reconciles. A plugin that proves unable to
+  take the splice is removed again inside the same block, over refusing it before instantiation,
+  since only an unprobed plugin gets there and its probe is what keeps it out next time.
+
 - **2026-10-03** — fx picker: Backspace on a trailing `/` deletes the whole last segment, over
   deleting the `/` alone, since a place's path is entered by descent a segment at a time. Ctrl-N and
   Ctrl-P move the cursor under either modifier mask, so the Ctrl key gives them on every platform;

@@ -61,8 +61,12 @@ under no name, are locked out for those frames.
 
 ## The fx picker
 
-1. The add-FX picker opens at the cursor, from a right-click on empty
-   canvas or `N`, with its field empty and focused. Its text is a path
+1. The fx picker opens in a context, with its field empty and focused.
+   The new context opens at the cursor, from a right-click on empty
+   canvas or `N`, over every installed plugin. The splice context opens
+   from a wire menu's **Insert fx…**, at the wire's triangle, over only
+   the plugins with an in and an out of the wire's type, and without
+   the buss rows. Its text is a path
    being completed over the catalogue's places (`docs/fxCatalogue.md`
    § The taxonomy): the list holds the current place's child places,
    drawn `name/`, then, at the root only, the two buss rows, then the
@@ -78,8 +82,10 @@ under no name, are locked out for those frames.
    text whose place resolves to nothing lists nothing.
 
 1. Enter or a click on a plugin adds it at the cursor as one undo step;
-   on a buss row, it adds a buss. Escape closes, as does a click
-   outside.
+   on a buss row, it adds a buss. In the splice context the plugin lands
+   on the triangle and splices into the wire as one undo step; a plugin
+   that can't take the splice leaves the graph as it was. Escape closes,
+   as does a click outside.
 
 1. Up and Down, or Ctrl-N and Ctrl-P (⌃ or ⌘ on macOS), move the
    cursor, wrapping over the whole list, and the list scrolls to keep
@@ -178,7 +184,9 @@ modes:
   already committed, so a `dblConsumed` flag stops the second press from
   re-arming a drag.
 - **Right-click** resolves triangle → wire menu, node body → node menu
-  (Delete node), empty canvas → FX picker.
+  (Delete node), empty canvas → FX picker. The triangle of either wire
+  type opens the wire menu; its Primary toggle is on audio wires only,
+  and Insert fx… on both. Only an audio triangle opens the fader.
 
 ### Splice on drop
 
@@ -399,13 +407,16 @@ page. This is that walk — every gesture the canvas supports.
   other than 1.
 - **Source tags** — drag a star tag and a bussed tag; default fan
   placement is unchanged.
-- **Fader** — click the triangle (the cursor warps to the knob), click
+- **Fader** — click an audio triangle (the cursor warps to the knob), click
   and drag in the strip, wheel coarse and fine (one undo entry),
   double-click to unity, leave to close.
 - **Nodes** — drag one and drag a selection; band-select; a click on
   empty canvas clears it; double-click dives to the sampler or floats
   the FX window.
-- **Menus and keys** — RMB the triangle (primary toggle), a node (delete
-  and buss items) and empty canvas (FX picker); the N-key picker and its
+- **Menus and keys** — RMB the triangle (primary toggle on audio, none
+  on MIDI), a node (delete and buss items) and empty canvas (FX picker);
+  Insert fx… on an audio and a MIDI wire, the picker at the triangle
+  with only candidates and no buss rows, one undo step to put the wire
+  back; the N-key picker and its
   descent into places by Tab, Enter and click; Esc at
   every gesture point.

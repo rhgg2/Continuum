@@ -260,6 +260,10 @@ stays private.
 1. `rm:transaction(label, fn)` brackets a batch of writes in a REAPER undo
    block, and suppresses UI refresh across it.
 
+1. Transactions nest. An inner block's end makes no undo point, and the
+   outermost label names the step, so a wm verb composes others under one
+   undo step.
+
 1. Inside that block, rm's chunk reads and writes all pass `isundo=false`:
    with the block already open, the per-call undo caching would be redundant.
 

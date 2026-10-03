@@ -199,6 +199,9 @@ function wv:spliceable(edgeIdx, nodeId) return wm:spliceable(edgeIdx, nodeId) en
 --post: pass-through to wm:spliceIntoEdge; node lands at pos, the wire's ops ride the input side
 function wv:spliceIntoEdge(edgeIdx, nodeId, pos) return wm:spliceIntoEdge(edgeIdx, nodeId, pos) end
 
+--post: pass-through to wm:insertFx; one undo step, or the graph stands as before
+function wv:insertFx(edgeIdx, fx, pos) return wm:insertFx(edgeIdx, fx, pos) end
+
 --contract: pass-through to wm:addBusNode; mints unwired buss at (x,y); orient defaults 'V'
 function wv:addBusNode(x, y, orient) return wm:addBusNode({ x = x, y = y }, orient) end
 

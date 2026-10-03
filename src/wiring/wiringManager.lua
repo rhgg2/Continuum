@@ -767,6 +767,29 @@ function wm:spliceIntoEdge(edgeIdx, nodeId, pos)
   return true
 end
 
+--post: one undo step: adds fx at pos with no auto-source and splices it into edges[edgeIdx]
+--post: returns the new node id; nil+err on refusal, or when the plugin can't take the splice —
+--post: then the node and its edges are removed again and the graph stands as before
+function wm:insertFx(edgeIdx, fx, pos)
+  ensureLoaded()
+  if not userGraph.edges[edgeIdx] then return nil, { code = 'no_edge', edge = edgeIdx } end
+  local display = fx.name and shortFxName(fx.name) or fx.ident
+  local id, err
+  rm:transaction('wiring: insert ' .. display, function()
+    id, err = self:addFxNode(pos.x, pos.y, fx, { autoSource = false })
+    if not id then return end
+    local spliced, spliceErr = self:spliceIntoEdge(edgeIdx, id, pos)
+    if spliced then return end
+    local added = id
+    id, err = nil, spliceErr
+    self:mutate(function(g)
+      g.nodes[added] = nil
+      g.edges = util.filter(g.edges, function(e) return e.from ~= added and e.to ~= added end)
+    end)
+  end)
+  return id, err
+end
+
 --shape: busRecord = { pos={x,y}, orient='V'|'H', ext={lo,hi}?, ins={{node,port,gain?},…}, outs={…}, trackId? } — ext = hand-sized bar span (axial offsets from pos); taps mirror the node's edges; trackId iff matrix
 --contract: deep copy of the 'bus' meta store: { [busId] = busRecord }
 function wm:busRecords()
