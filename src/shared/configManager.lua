@@ -212,6 +212,8 @@ local declarations = {
   { 'colour.wiring.node.selected',  'yellow'     },  -- outline stroke for selected nodes / rubber-band
   { 'colour.wiring.port.audio',     'base.zone2' },
   { 'colour.wiring.port.midi',      'alt.zone5'  },
+  { 'colour.wiring.ghost.audio',    {'colour.wiring.port.audio', 0.15} },  -- branch ghost's interior wash
+  { 'colour.wiring.ghost.midi',     {'colour.wiring.port.midi', 0.15}  },
   { 'colour.wiring.source.label',   'base.zone6' },  -- de-emphasised track-name on a source stub (neutral, not bold)
   { 'colour.wiring.tooltip.bg',     'base.zone9' },  -- matches toolbar; body's dark text reads against it
   { 'colour.wiring.badge.bg',       {'alt.zone9', 0.25} },  -- idle M/B chip: recessed dark, reads on any node tint

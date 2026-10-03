@@ -498,6 +498,11 @@ local function shortFxName(s)
   return s
 end
 
+-- A picked plugin's display name, as its node and undo labels show it.
+local function fxDisplayName(fx)
+  return fx.name and shortFxName(fx.name) or fx.ident
+end
+
 --contract: one Undo block around instantiate + mutate; stamps fxId on the new fx-node
 --contract: generators (io.ins==0) also spawn sourceTrack + source-node + midi edge
 --contract: a generator with audio outs also wires straight to master
@@ -506,7 +511,7 @@ function wm:addFxNode(x, y, fx, opts)
   ensureLoaded()
   local addErr = self:checkUserAddable(fx.ident)
   if addErr then return nil, addErr end
-  local display = fx.name and shortFxName(fx.name) or fx.ident
+  local display = fxDisplayName(fx)
   local newId, ok, err, sourceGuid
   rm:transaction('wiring: add ' .. display, function()
     local io         = self:instantiateFxOnScratch(fx.ident)
@@ -767,27 +772,49 @@ function wm:spliceIntoEdge(edgeIdx, nodeId, pos)
   return true
 end
 
---post: one undo step: adds fx at pos with no auto-source and splices it into edges[edgeIdx]
---post: returns the new node id; nil+err on refusal, or when the plugin can't take the splice —
---post: then the node and its edges are removed again and the graph stands as before
-function wm:insertFx(edgeIdx, fx, pos)
-  ensureLoaded()
-  if not userGraph.edges[edgeIdx] then return nil, { code = 'no_edge', edge = edgeIdx } end
-  local display = fx.name and shortFxName(fx.name) or fx.ident
+-- The add-then-wire picks (insert, replace, branch): one undo step that adds fx at pos with no
+-- auto-source, then calls wire(id) → ok, err. A failed wire strips the node and its edges again.
+local function addWired(self, label, pos, fx, wire)
   local id, err
-  rm:transaction('wiring: insert ' .. display, function()
+  rm:transaction(label, function()
     id, err = self:addFxNode(pos.x, pos.y, fx, { autoSource = false })
     if not id then return end
-    local spliced, spliceErr = self:spliceIntoEdge(edgeIdx, id, pos)
-    if spliced then return end
+    local wired, wireErr = wire(id)
+    if wired then return end
     local added = id
-    id, err = nil, spliceErr
+    id, err = nil, wireErr
     self:mutate(function(g)
       g.nodes[added] = nil
       g.edges = util.filter(g.edges, function(e) return e.from ~= added and e.to ~= added end)
     end)
   end)
   return id, err
+end
+
+--post: one undo step: adds fx at pos with no auto-source and splices it into edges[edgeIdx]
+--post: returns the new node id; nil+err on refusal, or when the plugin can't take the splice —
+--post: then the node and its edges are removed again and the graph stands as before
+function wm:insertFx(edgeIdx, fx, pos)
+  ensureLoaded()
+  if not userGraph.edges[edgeIdx] then return nil, { code = 'no_edge', edge = edgeIdx } end
+  return addWired(self, 'wiring: insert ' .. fxDisplayName(fx), pos, fx, function(added)
+    return self:spliceIntoEdge(edgeIdx, added, pos)
+  end)
+end
+
+--post: one undo step: adds fx at pos with no auto-source, wired from from.id's out (from.port
+--post: for audio) into its first in of from.type; returns the new node id
+--post: nil+err on refusal, or if fx can't take the wire — then fx is removed and the graph stands
+function wm:branchFx(from, fx, pos)
+  ensureLoaded()
+  if not userGraph.nodes[from.id] then return nil, { code = 'no_node', id = from.id } end
+  local audio = from.type == 'audio'
+  return addWired(self, 'wiring: branch ' .. fxDisplayName(fx), pos, fx, function(added)
+    return self:mutate(function(g)
+      util.add(g.edges, { type = from.type, from = from.id, fromPort = audio and from.port or nil,
+                          to = added, toPort = audio and 1 or nil })
+    end)
+  end)
 end
 
 --post: per type and side, the highest port wired on nodeId (a MIDI wire is port 1); every count set
@@ -810,13 +837,9 @@ function wm:replaceFx(nodeId, fx)
   local old = userGraph.nodes[nodeId]
   if not (old and old.kind == 'fx') then return nil, { code = 'not_fx', id = nodeId } end
   local pos = { x = old.pos.x, y = old.pos.y }
-  local label = 'wiring: replace ' .. (old.fxDisplay or 'fx') .. ' with '
-                .. (fx.name and shortFxName(fx.name) or fx.ident)
-  local id, err
-  rm:transaction(label, function()
-    id, err = self:addFxNode(pos.x, pos.y, fx, { autoSource = false })
-    if not id then return end
-    local added, retagged = id, {}
+  local label = 'wiring: replace ' .. (old.fxDisplay or 'fx') .. ' with ' .. fxDisplayName(fx)
+  return addWired(self, label, pos, fx, function(added)
+    local retagged = {}
     local moved, moveErr = self:mutate(function(g)
       -- addFxNode's own master wire would duplicate a moved one
       g.edges = util.filter(g.edges, function(e) return e.from ~= added and e.to ~= added end)
@@ -841,15 +864,9 @@ function wm:replaceFx(nodeId, fx)
         local node = userGraph.nodes[retaggedId]
         persistNodeMeta(node, { tagPos = node.tagPos })
       end
-      return
     end
-    id, err = nil, moveErr
-    self:mutate(function(g)
-      g.nodes[added] = nil
-      g.edges = util.filter(g.edges, function(e) return e.from ~= added and e.to ~= added end)
-    end)
+    return moved, moveErr
   end)
-  return id, err
 end
 
 --shape: busRecord = { pos={x,y}, orient='V'|'H', ext={lo,hi}?, ins={{node,port,gain?},…}, outs={…}, trackId? } — ext = hand-sized bar span (axial offsets from pos); taps mirror the node's edges; trackId iff matrix

@@ -140,12 +140,16 @@ thereafter authored in the FX tab, and the picker browses it.**
 
 1. **branch** opens where a forward draft is released over empty
    canvas. The pick lands the plugin at the release point, wired from
-   the draft's port into the plugin's first in of that port's type.
+   the draft's port into the plugin's first in of that port's type. An
+   instrument also takes its wire to master, as it does in **new**.
 
 1. A draft dragged from a source row in the palette branches over MIDI.
 
 1. While a draft is over empty canvas, its loose end draws a ghost
    node. The release is thus seen to branch before it is made.
+
+1. After the release, the draft and its ghost stay drawn while the
+   picker is up.
 
 1. Escape or a click outside the picker cancels a branch, and the
    graph stands as it was before the draft. Escape during the draft

@@ -30,10 +30,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-10-03 wiring: branch an fx from a draft released on empty canvas (§ Opening the picker 4–7, 9–10)
 - 2026-10-03 wiring: replace an fx node from Replace… (design § Opening the picker 8–10)
 - 2026-10-03 wiring: splice an fx into a wire from Insert fx… (design § Opening the picker 1, 3, 9–10)
 - 2026-10-03 wm: splice over either wire type (§ The splice)
-- 2026-10-03 fxCatalogue: filter picker rows by need and hide empty places (§ The filtering seam)
 
 ## Now
 
@@ -41,12 +41,5 @@
 
 ## Queued (current phase; one-liners)
 
-- wiringRender: **branch** from a draft released on empty canvas
-  (§ Opening the picker 4–7, 9) — the release opens the picker in the
-  branch context of the draft port's type (MIDI for a palette row); the
-  pick lands the plugin at the release point wired from that port into
-  its first in of the type, as one undo step; a ghost node draws at the
-  loose end over empty canvas; Escape or a click outside the picker
-  leaves the graph as it was, and Escape during the draft cancels it.
 
 

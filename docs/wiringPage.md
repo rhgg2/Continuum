@@ -68,7 +68,10 @@ under no name, are locked out for those frames.
    the plugins with an in and an out of the wire's type, and without
    the buss rows. The replace context opens from an fx node menu's
    **Replace…**, at the cursor, over only the plugins whose ports cover
-   the node's wires, and without the buss rows. Its text is a path
+   the node's wires, and without the buss rows. The branch context opens
+   where a fresh forward draft is released on empty canvas, beside the
+   draft's ghost node, over only the plugins with an in of the draft's
+   type (MIDI for a palette draft), and without the buss rows. Its text is a path
    being completed over the catalogue's places (`docs/fxCatalogue.md`
    § The taxonomy): the list holds the current place's child places,
    drawn `name/`, then, at the root only, the two buss rows, then the
@@ -89,7 +92,10 @@ under no name, are locked out for those frames.
    that can't take the splice leaves the graph as it was. In the replace
    context the plugin takes the node's position and every wire on it,
    and the node goes, as one undo step; a plugin that can't take the
-   wires leaves the graph as it was. Escape closes,
+   wires leaves the graph as it was. In the branch context the plugin
+   lands at the release point, wired from the draft's port into its
+   first in of that type, as one undo step; a plugin that can't take the
+   wire leaves the graph as it was. Escape closes,
    as does a click outside.
 
 1. Up and Down, or Ctrl-N and Ctrl-P (⌃ or ⌘ on macOS), move the
@@ -169,6 +175,13 @@ The seven modes:
   `forbidden` is consulted at hover time (cycle-blocked targets get no
   visual encouragement) and again at the mouseup commit. Cleared on
   commit / delete / cancel / Esc.
+
+  A forward draft whose loose end has moved and sits over empty canvas,
+  with no drop target and no node under it, *branches*: the end draws a
+  ghost node in the draft's port colour, and mouseup there opens the fx
+  picker's branch context. A wire under the end still counts as empty
+  canvas; a release on an ineligible node still cancels. The draft wire
+  and ghost stay drawn while that picker is up, and go with it.
 - **`tagDrag`** — mousedown on a source's tag. The tag follows the cursor,
   and mouseup past the click threshold writes its position as an offset
   from the consumer node it hangs off.
@@ -282,19 +295,22 @@ under *Spillover engagement and pinning*.
 The canvas is a strict z-stack, and several effects depend on the order:
 
 1. **Existing wires** (bottom), the splice highlight painted over them,
-   both overpainted at the node edge by step 4 so they read as emerging
+   both overpainted at the node edge by step 6 so they read as emerging
    from behind the body.
-2. **Popup sleeves** — the pale port-row backgrounds — before the nodes,
-   so the body overpaints their overlap and so wires entering an engaged
-   node's popout are occluded.
-3. **The in-flight draft wire**, above the sleeves: the wire being dragged
-   always reads on top of every popout decoration, where existing wires
-   (below the sleeve) do not.
-4. **Node bodies**, overpainting wire and draft edges.
-5. **Wire-end highlight**, after the node pass — nodes overpaint wires, so
+2. **Popup sleeves** — the pale port-row backgrounds — so wires entering
+   an engaged node's popout are occluded.
+3. **The in-flight draft wire**, above the sleeves, where existing wires
+   (below the sleeve) are not.
+4. **Port rows** — the handle and the chips outside the body.
+5. **The branch ghost**, over the chips and the draft wire's end: it
+   stands for the node about to land.
+6. **Node bodies**, overpainting the sleeves, chips, wires and ghost of
+   any node they overlap, so a popout reads as behind its neighbours.
+7. **Wire-end highlight**, after the node pass — nodes overpaint wires, so
    an in-pass highlight would be invisible.
-6. **Fader, error overlay, then the overlay pass** (body outline + port row
-   + spillover list per engaged node).
+8. **Fader, error overlay, then what an engaged node draws on its own body
+   or must stay usable**: body outline, in-body keyboard, spillover list.
+9. **A palette drag's floating tag** (top), over everything.
 
 `drawCanvas` runs the whole stack in this order, as one phase of the
 canvas frame. The band overlay is the exception: it draws over the
@@ -424,6 +440,14 @@ page. This is that walk — every gesture the canvas supports.
   with only candidates and no buss rows, one undo step to put the wire
   back; Replace… on an instrument and an effect, the picker at the cursor
   with only covering plugins, the source still wired, one undo step to
-  put the node back; the N-key picker and its
+  put the node back; a shift-drag from an audio chip and from a MIDI
+  port, released on empty canvas, shows the ghost before release and
+  opens the picker beside it with only candidates and no buss rows; a
+  palette row released on canvas branches over MIDI, its tag left of the
+  ghost, and one released inside the palette does nothing; a release on
+  an ineligible node still cancels and a redraft onto empty canvas still
+  deletes; the draft and ghost hold while the picker is up, and Escape or
+  a click outside clears them with the graph unchanged; a branch pick is
+  one undo step, and Escape mid-draft cancels without a picker; the N-key picker and its
   descent into places by Tab, Enter and click; Esc at
   every gesture point.

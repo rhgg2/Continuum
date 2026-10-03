@@ -202,6 +202,9 @@ function wv:spliceIntoEdge(edgeIdx, nodeId, pos) return wm:spliceIntoEdge(edgeId
 --post: pass-through to wm:insertFx; one undo step, or the graph stands as before
 function wv:insertFx(edgeIdx, fx, pos) return wm:insertFx(edgeIdx, fx, pos) end
 
+--post: pass-through to wm:branchFx; one undo step, or the graph stands as before
+function wv:branchFx(from, fx, pos) return wm:branchFx(from, fx, pos) end
+
 --post: pass-through to wm:coverNeed — the need of a plugin that can take every wire on nodeId
 function wv:coverNeed(nodeId) return wm:coverNeed(nodeId) end
 

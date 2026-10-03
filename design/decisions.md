@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-10-03** — Port-row sleeves and chips draw below the node bodies, over above them, so an
+  engaged node's popout reads as behind a neighbour it overlaps; what an engaged node draws on its
+  own body, and the spillover list, stay above. The branch ghost draws as a node would, over the
+  chips and the draft wire's end and under every body. The canvas counts as hovered while a chip or
+  palette row is the active item, since otherwise no drag could ever be released over it.
+
 - **2026-10-03** — A replace covers a node's wires with the existing need shape: per type and side,
   the highest port wired there, since ports count stereo pairs and pair k finds pair k exactly when
   ins ≥ k. The replace mutate strips the new plugin's own wires before moving the node's in, over an

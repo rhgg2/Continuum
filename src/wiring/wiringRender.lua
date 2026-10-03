@@ -99,6 +99,7 @@ local UI = {
     STUB_LEN = 40,    -- visible stub length: consumer rect edge to the tag patch's near edge (tag sits further out the bigger its patch)
     VIS_H    = 0.62,  -- visible glyph band as a fraction of measured line height (trims ascent/descent slack)
     PAD      = 3,     -- bg-patch padding around the source tag's glyphs (the patch occludes the wire behind them)
+    GHOST_GAP = 6,    -- gap between a palette draft's floating tag and the ghost node to its right
   },
   BUS = {
     TAP_LEN   = 34,  -- visible length of a source copy's orthogonal tap off the bar
@@ -136,7 +137,7 @@ local paletteSource = nil  -- nodeId the palette del button acts on; cleared whe
 
 -- The canvas popups. A slot holds a popup's live state while open: RMB
 -- dispatch and openFxPicker fill it, popupShell clears it when ImGui closes it.
---shape: popups = { wire = { edgeIdx, anchorX, anchorY }, node = { nodeId, anchorX, anchorY }, fx = { anchorSX, anchorSY, buf, cursor, source=fxPickerSource, list=pickerItem[], leading=row[], commit=function(row), replace?=string, refocus?=true, needsOpen? } }
+--shape: popups = { wire = { edgeIdx, anchorX, anchorY }, node = { nodeId, anchorX, anchorY }, fx = { anchorSX, anchorSY, buf, cursor, source=fxPickerSource, list=pickerItem[], leading=row[], commit=function(row), ghost?={ draft, x, y }, replace?=string, refocus?=true, needsOpen? } }
 local popups = {}
 
 -- Canvas centre/half-extents, captured at the top of renderCanvas so openFxPicker
@@ -145,7 +146,7 @@ local canvasOrigin = { ox = 0, oy = 0, hw = 0, hh = 0 }
 
 -- Forward decls: RMB dispatch, the wire menu and the N-key command fill the picker slot;
 -- renderFxPickerPopup opens and draws it, with the wiring-scope commands below.
-local openFxPicker, newFxContext, spliceFxContext, replaceFxContext, renderFxPicker
+local openFxPicker, newFxContext, spliceFxContext, replaceFxContext, branchFxContext, renderFxPicker
 
 ----- Pixel geometry (page-owned)
 
@@ -702,27 +703,29 @@ local function drawPortRowBg(p, layout)
   p.fill(popup, 'wiring.tooltip.bg', UI.NODE.ROUND)
 end
 
--- Draws the handle and every slot, outlining the one matching pick.slot. Chips
--- stay visible with the list open (it extends perpendicular) so the port→row map holds.
-local function drawPortRow(p, pick, idPrefix)
+-- Draws one side of the row, outlining the slot matching pick.slot: handle and chips outside
+-- the body (under the node pass), or the in-body slots (over it). Chips stay visible with the list open.
+local function drawPortRow(p, pick, idPrefix, inBody)
   local layout, highlight = pick.layout, pick.slot
-  if layout.handle then drawHandle(p, layout.handle, layout.side) end
+  if layout.handle and not inBody then drawHandle(p, layout.handle, layout.side) end
   local bodyName = 'wiring.node.' .. pick.nv.category
   for i, s in ipairs(layout.slots) do
-    if s.inBody then
-      -- Body-internal kbd: fill body colour to overpaint the label, then the
-      -- icon. No InvisibleButton (the body owns the drag area) or tooltip.
-      p.fill(boxRect(s), bodyName)
-      drawKeyboardIcon(p, s.x, s.y)
-    else
-      drawSlot(p, s, idPrefix .. '/' .. i)
-    end
-    -- Match by (kind, portIdx), not identity: defaultSlot returns a synthetic
-    -- spec, so identity would miss the midi kbd on a body-hover midi draft.
-    if highlight and s.kind == highlight.kind
-       and (s.kind ~= 'audio' or s.portIdx == highlight.portIdx) then
-      p.stroke(rect(s.x, s.y, s.x + s.w, s.y + s.h),
-               'wiring.node.selected', UI.NODE.SELECTED_STROKE, 0)
+    if (s.inBody or false) == inBody then
+      if s.inBody then
+        -- Body-internal kbd: fill body colour to overpaint the label, then the
+        -- icon. No InvisibleButton (the body owns the drag area) or tooltip.
+        p.fill(boxRect(s), bodyName)
+        drawKeyboardIcon(p, s.x, s.y)
+      else
+        drawSlot(p, s, idPrefix .. '/' .. i)
+      end
+      -- Match by (kind, portIdx), not identity: defaultSlot returns a synthetic
+      -- spec, so identity would miss the midi kbd on a body-hover midi draft.
+      if highlight and s.kind == highlight.kind
+         and (s.kind ~= 'audio' or s.portIdx == highlight.portIdx) then
+        p.stroke(rect(s.x, s.y, s.x + s.w, s.y + s.h),
+                 'wiring.node.selected', UI.NODE.SELECTED_STROKE, 0)
+      end
     end
   end
 end
@@ -1159,6 +1162,36 @@ local function drawTagAt(p, cx, cy, label)
   local tw, th = p.measure(label, wireFont, UI.WIRE.LABEL_SIZE)
   p.text(math.floor(cx - tw / 2), math.floor(cy - th / 2), 'wiring.source.label',
          label, wireFont, UI.WIRE.LABEL_SIZE)
+end
+
+--shape: shownDraft = { draft, x, y, branches? } — a draft's loose end at (x, y), live or held by the picker
+-- A palette draft has no wire and no type; its ghost is MIDI's.
+local function draftKind(draft) return draft.type == 'audio' and 'audio' or 'midi' end
+
+-- The draft wire to its loose end; nothing for a palette draft.
+local function drawDraftWire(p, nodesById, shown)
+  local seg = draftSeg(shown.draft, nodesById, shown.x, shown.y)
+  if seg then drawWire(p, seg, { name = 'wiring.port.' .. draftKind(shown.draft) }) end
+end
+
+-- The ghost node at the loose end of a draft whose release would branch.
+local function drawGhost(p, shown)
+  if not shown.branches then return end
+  local kind = draftKind(shown.draft)
+  -- bg first, so the wash shades the ghost rather than what lies behind it
+  local r = nodeBox{ pos = { x = shown.x, y = shown.y } }
+  p.fill(r, 'bg', UI.NODE.ROUND)
+  p.fill(r, 'wiring.ghost.' .. kind, UI.NODE.ROUND)
+  p.stroke(r, 'wiring.port.' .. kind, 1, UI.NODE.ROUND)
+end
+
+-- A palette draft's floating tag: at the loose end, or left of the ghost, clear of it.
+local function drawPaletteTag(p, shown)
+  local label = shown.draft.fromPalette and shown.draft.keptLabel
+  if not label then return end
+  if not shown.branches then return drawTagAt(p, shown.x, shown.y, label) end
+  local tw = p.measure(label, wireFont, UI.WIRE.LABEL_SIZE)
+  drawTagAt(p, shown.x - UI.NODE.W / 2 - UI.TAG.GHOST_GAP - tw / 2, shown.y, label)
 end
 
 -- Wrapped label + patch half-extents at the wire-label font. One source of truth
@@ -1715,6 +1748,13 @@ modes.band = {
   end,
 }
 
+-- A draft past the click threshold; a palette draft is born moved.
+local function draftMoved(draft, frame)
+  return draft.fromPalette
+      or math.abs(frame.lmx - draft.mx0) >= UI.CLICK_THRESH
+      or math.abs(frame.lmy - draft.my0) >= UI.CLICK_THRESH
+end
+
 -- { type?, cursorEnd='to'|'from', keptId, keptPort?, keptSide?, keptAnchor?, forbidden,
 --   mx0, my0, fromList, edgeIdx?, fromPalette?, keptLabel? } — the in-flight wire
 modes.wireDraft = {
@@ -1722,10 +1762,7 @@ modes.wireDraft = {
   update = function(g, frame)
     if ImGui.IsMouseDown(ctx, 0) then return end
     local targetHit = frame.targetHit
-    local moved = g.fromPalette
-               or math.abs(frame.lmx - g.mx0) >= UI.CLICK_THRESH
-               or math.abs(frame.lmy - g.my0) >= UI.CLICK_THRESH
-    if moved then
+    if draftMoved(g, frame) then
       if dropEligible(g, targetHit) then
         local slot = targetHit.slot
         local port = (slot.kind == 'audio') and slot.portIdx or nil
@@ -1750,6 +1787,8 @@ modes.wireDraft = {
         -- Redraft onto empty canvas (judged by the wire end) deletes the wire.
         -- Ineligible-target drops fall through to cancel below.
         wv:removeWireAt(g.edgeIdx)
+      elseif frame.draftBranches then
+        openFxPicker(branchFxContext(g, frame.draftCx, frame.draftCy))
       end
       hoverFreeze = { x = frame.mx, y = frame.my }
     elseif g.fromList and g.type == 'audio' and g.keptPort and g.keptPort >= 2 then
@@ -1854,7 +1893,7 @@ modes.faderDrag = {}
 
 ----- Canvas
 
---shape: frame = { p, sx, sy, mx, my, lmx, lmy, overCanvas, shiftHeld, nodeViews, nodesById, wireViewsList, busViewsList, selection, segs, busRails, matrixRails, spliceNode?, spliceIdx?, wireEndHover?, tagHover?, arrowHitIdx?, draft?, draftCx?, draftCy?, sourceHit?, targetHit?, overlays }
+--shape: frame = { p, sx, sy, mx, my, lmx, lmy, overCanvas, shiftHeld, nodeViews, nodesById, wireViewsList, busViewsList, selection, segs, busRails, matrixRails, spliceNode?, spliceIdx?, wireEndHover?, tagHover?, arrowHitIdx?, draft?, draftCx?, draftCy?, draftBranches?, sourceHit?, targetHit?, overlays }
 -- The frame is the canvas's carrier: each phase reads what its predecessors
 -- left there and writes its own results back. See docs/wiringPage.md.
 local function beginFrame(w, h)
@@ -1872,9 +1911,9 @@ local function beginFrame(w, h)
 
   local mx, my   = ImGui.GetMousePos(ctx)
   local lmx, lmy = p.fromScreen(mx, my)
-  -- Body split added a palette child; gate every press-start on canvas hover
-  -- so a palette click can't begin a canvas band/drag/menu. Mouseup stays open.
-  local overCanvas = ImGui.IsWindowHovered(ctx)
+  -- Gate press-starts on canvas hover so a palette click can't begin a canvas band/drag/menu.
+  -- AllowWhenBlocked: a chip or palette row being dragged still sees the canvas.
+  local overCanvas = ImGui.IsWindowHovered(ctx, ImGui.HoveredFlags_AllowWhenBlockedByActiveItem)
   local shiftHeld = keyQueue:mods() & ImGui.Mod_Shift ~= 0
   -- Shift clears the selection (rising edge only) so the wire-creation hover
   -- owns the visual layer; releasing shift drops sticky (a pinned overlay
@@ -2021,6 +2060,10 @@ local function resolveHover(frame)
     -- A bar hit (fat target for the bussed port) wins over a node-port hit.
     frame.targetHit = busBarHit(frame.busRails, draft, frame.draftCx, frame.draftCy)
                       or frame.targetHit
+    -- Released here, a fresh draft opens the branch picker; a wire under the end doesn't count.
+    frame.draftBranches = not draft.edgeIdx and draftMoved(draft, frame) and frame.overCanvas
+                          and not frame.targetHit
+                          and not nodeAtPoint(frame.nodeViews, frame.draftCx, frame.draftCy)
   elseif frame.shiftHeld and not hoverFreeze then
     frame.sourceHit = busBarSource(frame.busRails, frame.lmx, frame.lmy)
                    or shiftHoverHit(frame.nodeViews, frame.lmx, frame.lmy)
@@ -2050,7 +2093,8 @@ end
 local function drawCanvas(frame)
   local p, draft = frame.p, frame.draft
 
-  -- z-stack (docs/wiringPage.md): wires < source tags < sleeves < draft < nodes.
+  -- z-stack (docs/wiringPage.md): wires < source tags < sleeves < draft < chips < ghost
+  -- < nodes < on-body overlays and lists < palette tag.
   local placedLabels = {}
   drawWiresPass(p, frame.segs, frame.wireViewsList,
     { skipEdgeIdx = draft and draft.edgeIdx }, placedLabels)
@@ -2073,25 +2117,25 @@ local function drawCanvas(frame)
     local rail = nv.category == 'bus' and frame.matrixRails[nv.id]
     if rail then drawBusBar(p, rail, frame.selection[nv.id]) end
   end
+  -- The draft (draw order in docs/wiringPage.md): the live one, else the one the branch
+  -- picker holds frozen at its release point.
+  local held  = popups.fx and popups.fx.ghost
+  local shown = draft and { draft = draft, x = frame.draftCx, y = frame.draftCy,
+                            branches = frame.draftBranches }
+                or held and { draft = held.draft, x = held.x, y = held.y, branches = true }
   for _, pick in ipairs(frame.overlays) do drawPortRowBg(p, pick.layout) end
-  -- The draft wire (draw order in docs/wiringPage.md).
-  local dSeg = draft and draftSeg(draft, frame.nodesById,
-                                  frame.draftCx, frame.draftCy)
-  if dSeg then
-    local name = draft.type == 'midi' and 'wiring.port.midi' or 'wiring.port.audio'
-    drawWire(p, dSeg, { name = name })
+  if shown then drawDraftWire(p, frame.nodesById, shown) end
+  -- Chips under the node pass, so a neighbour's body occludes them. idPrefix is nv.id-keyed
+  -- so InvisibleButtons stay unique across simultaneous overlays.
+  for _, pick in ipairs(frame.overlays) do
+    drawPortRow(p, pick, '##portSlot/' .. pick.nv.id, false)
   end
+  if shown then drawGhost(p, shown) end
   for _, nv in ipairs(frame.nodeViews) do
     if not (nv.category == 'bus' and frame.matrixRails[nv.id]) then
       drawNode(p, nv, frame.selection[nv.id])
       if nodeHasFx(nv) then drawNodeBadges(p, nv, wv:muted(nv.id), wv:bypassed(nv.id)) end
     end
-  end
-
-  -- A palette drag carries a floating source tag at the cursor (on top of
-  -- nodes) — it commits to a stub on drop. The wire-type is undecided here.
-  if draft and draft.fromPalette then
-    drawTagAt(p, frame.draftCx, frame.draftCy, draft.keptLabel)
   end
 
   -- After the node pass: nodes overpaint wires, so an in-pass highlight (and
@@ -2108,17 +2152,19 @@ local function drawCanvas(frame)
 
   if fader then drawFader(p, fader) end
 
-  -- Overlay pass per engaged node. idPrefix is nv.id-keyed so InvisibleButtons
-  -- stay unique across simultaneous overlays.
+  -- Overlay pass per engaged node: what sits on its body, and the list, which must stay usable.
   for _, pick in ipairs(frame.overlays) do
     -- Body outline only for a body-default audio slot (no chip to carry the
     -- mark). Chevron hits and midi (the kbd self-highlights) leave it unmarked.
     if pick.slot and not pick.slot.x and pick.slot.kind ~= 'midi' then
       drawBodyOutline(p, pick.nv)
     end
-    drawPortRow(p, pick, '##portSlot/' .. pick.nv.id)
+    drawPortRow(p, pick, '##portSlot/' .. pick.nv.id, true)
     if pick.list then drawList(p, pick.list, pick.slot) end
   end
+
+  -- Topmost, over the chips: a palette drag's floating tag rides the cursor.
+  if shown then drawPaletteTag(p, shown) end
 
   wv:setHover((frame.sourceHit and frame.sourceHit.nv.id)
               or (frame.targetHit and frame.targetHit.nv.id) or nil)
@@ -2745,14 +2791,14 @@ local BUS_ROWS = {
 -- The need of a plugin that stands alone: every installed plugin is a candidate.
 local NEW_NEED = {}
 
---shape: pickerContext = { x, y, need=need, leading=row[], commit=function(row) }  -- x,y canvas coords; the popup anchors there
+--shape: pickerContext = { x, y, need=need, leading=row[], commit=function(row), ghost?={ draft, x, y } }  -- x,y canvas coords; the popup anchors there
 --post: popups.fx holds the picker over context's candidates and leading rows, opening next frame
 openFxPicker = function(context)
   local source = wv:fxPickerSource(context.need)
   popups.fx = {
     anchorSX = context.x + canvasOrigin.ox, anchorSY = context.y + canvasOrigin.oy,
     buf = '', cursor = 1, source = source, list = wv:fxPickerList(source, '', context.leading),
-    leading = context.leading, commit = context.commit, needsOpen = true,
+    leading = context.leading, commit = context.commit, ghost = context.ghost, needsOpen = true,
   }
 end
 
@@ -2791,6 +2837,18 @@ replaceFxContext = function(nodeId, x, y)
     wv:replaceFx(nodeId, { name = row.name, ident = row.ident })
   end
   return { x = x, y = y, need = wv:coverNeed(nodeId), leading = {}, commit = commit }
+end
+
+-- The picker where a fresh draft was released on empty canvas: plugins with an in of the
+-- draft's type, no buss rows. It anchors at the ghost's top-right; the node lands at (x, y).
+branchFxContext = function(draft, x, y)
+  local wireType = draft.type or 'midi'   -- a palette draft branches over MIDI
+  local function commit(row)
+    wv:branchFx({ id = draft.keptId, port = draft.keptPort, type = wireType },
+                { name = row.name, ident = row.ident }, { x = x, y = y })
+  end
+  return { x = x + UI.NODE.W / 2, y = y - UI.NODE.H / 2, need = { [wireType] = { ins = 1 } },
+           leading = {}, commit = commit, ghost = { draft = draft, x = x, y = y } }
 end
 
 -- Defer the gesture so the picker's close paints before the live
